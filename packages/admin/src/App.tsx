@@ -8,6 +8,9 @@ import { ContentTypeBuilder } from './pages/ContentTypeBuilder.tsx'
 import { ContentTypesIndex } from './pages/content-types/Index.tsx'
 import { ContentTypeForm } from './pages/content-types/Form.tsx'
 import { ContentManager } from './pages/ContentManager.tsx'
+import { ContentIndex } from './pages/content/Index.tsx'
+import { EntriesList } from './pages/content/EntriesList.tsx'
+import { EntryForm } from './pages/content/EntryForm.tsx'
 import { MediaLibrary } from './pages/MediaLibrary.tsx'
 import { Settings } from './pages/Settings.tsx'
 import { SettingsOverview } from './pages/settings/Overview.tsx'
@@ -26,7 +29,16 @@ const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <Dashboard /> },
-      { path: 'content', element: <ContentManager /> },
+      {
+        path: 'content',
+        element: <ContentManager />,
+        children: [
+          { index: true, element: <ContentIndex /> },
+          { path: ':slug', element: <EntriesList /> },
+          { path: ':slug/new', element: <EntryForm /> },
+          { path: ':slug/:id', element: <EntryForm /> },
+        ],
+      },
       { path: 'media', element: <MediaLibrary /> },
       {
         path: 'content-types',
