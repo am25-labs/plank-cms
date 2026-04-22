@@ -8,5 +8,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@plank/db": "workspace:*"
   }
 }
