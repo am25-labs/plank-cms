@@ -27,13 +27,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
 
-const NAV_ITEMS = [
+const BASE_ITEMS = [
   { to: '/', icon: LayoutDashboardIcon, label: 'Dashboard' },
   { to: '/content-types', icon: LayersIcon, label: 'Content Types' },
   { to: '/content', icon: FileTextIcon, label: 'Content' },
   { to: '/media', icon: ImageIcon, label: 'Media' },
-  { to: '/settings', icon: Settings2Icon, label: 'Settings' },
 ]
+const ADMIN_ITEMS = [{ to: '/settings', icon: Settings2Icon, label: 'Settings' }]
 
 function initials(user: { email: string; firstName?: string | null; lastName?: string | null }) {
   if (user.firstName && user.lastName)
@@ -51,6 +51,10 @@ function LayoutShell() {
   function isActive(to: string) {
     return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
   }
+
+  const role = user?.role?.toLowerCase()
+  const isAdmin = role === 'super admin' || role === 'admin'
+  const NAV_ITEMS = isAdmin ? [...BASE_ITEMS, ...ADMIN_ITEMS] : BASE_ITEMS
 
   return (
     <TooltipProvider delayDuration={300}>

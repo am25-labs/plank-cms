@@ -31,7 +31,14 @@ export default function App() {
             <Route path="content-types" element={<ContentTypeBuilder />} />
             <Route path="content" element={<ContentManager />} />
             <Route path="media" element={<MediaLibrary />} />
-            <Route path="settings" element={<Settings />}>
+            <Route
+              path="settings"
+              element={
+                <ProtectedRoute roles={['super admin', 'admin']}>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            >
               <Route index element={<Navigate to="users" replace />} />
               <Route path="users" element={<SettingsUsers />} />
               <Route
