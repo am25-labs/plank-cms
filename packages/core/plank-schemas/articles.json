@@ -23,11 +23,17 @@
       "width": "half"
     },
     {
+      "name": "description",
+      "type": "text",
+      "width": "full"
+    },
+    {
       "name": "content",
       "type": "richtext",
       "width": "full"
     }
   ],
+  "isDefault": true,
   "createdAt": "2026-04-23T04:15:56.188Z",
-  "updatedAt": "2026-04-23T04:38:36.859Z"
+  "updatedAt": "2026-04-23T05:02:07.062Z"
 }
