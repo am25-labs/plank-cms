@@ -43,7 +43,7 @@ export function Layout() {
   const { pathname } = useLocation()
 
   function isActive(to: string) {
-    return to === '/' ? pathname === '/' : pathname.startsWith(to)
+    return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
   }
 
   return (

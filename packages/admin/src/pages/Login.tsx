@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/auth.tsx'
 import { useApi } from '@/hooks/useApi.ts'
@@ -29,7 +29,7 @@ export function Login() {
       .catch(() => setNeedsSetup(false))
   }, [])
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
     setValidationError(null)
 
