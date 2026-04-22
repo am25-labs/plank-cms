@@ -6,6 +6,14 @@ import { useAuth } from '@/context/auth.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table.tsx'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -96,27 +104,23 @@ export function SettingsRoles() {
         )}
       </div>
 
-      <div className="rounded-md border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b bg-muted/50">
-              <th className="px-4 py-3 text-left font-medium text-muted-foreground w-40">Resource</th>
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {/* Row 1: role names + save buttons */}
+            <TableRow>
+              <TableHead className="w-40" rowSpan={2} />
 
-              {/* Super Admin — locked */}
               {superAdminRole && (
-                <th className="px-4 py-3 text-center" colSpan={3}>
-                  <div className="text-xs font-semibold">{superAdminRole.name}</div>
-                  <div className="flex justify-center gap-4 mt-1.5 text-xs text-muted-foreground">
-                    {ACTIONS.map((a) => <span key={a.key} className="w-4">{a.label}</span>)}
-                  </div>
-                </th>
+                <TableHead colSpan={3} className="border-l text-center">
+                  {superAdminRole.name}
+                </TableHead>
               )}
 
-              {/* Editable roles */}
               {editableRoles.map((role) => (
-                <th key={role.id} className="px-4 py-3 text-center" colSpan={3}>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-semibold">{role.name}</span>
+                <TableHead key={role.id} colSpan={3} className="border-l">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{role.name}</span>
                     <Button
                       size="sm"
                       variant={dirty.has(role.id) ? 'default' : 'ghost'}
@@ -128,52 +132,51 @@ export function SettingsRoles() {
                       Save
                     </Button>
                   </div>
-                  <div className="flex justify-center gap-4 mt-1.5 text-xs text-muted-foreground">
-                    {ACTIONS.map((a) => <span key={a.key} className="w-4">{a.label}</span>)}
-                  </div>
-                </th>
+                </TableHead>
               ))}
-            </tr>
-          </thead>
+            </TableRow>
 
-          <tbody>
-            {RESOURCES.map(({ key: resource, label }, i) => (
-              <tr key={resource} className={i % 2 === 0 ? '' : 'bg-muted/20'}>
-                <td className="px-4 py-3 font-medium">{label}</td>
+            {/* Row 2: R / W / D labels */}
+            <TableRow>
+              {superAdminRole && ACTIONS.map((a, i) => (
+                <TableHead key={a.key} className={`w-12 text-center font-normal ${i === 0 ? 'border-l' : ''}`}>
+                  {a.label}
+                </TableHead>
+              ))}
+              {editableRoles.map((role) => ACTIONS.map((a, i) => (
+                <TableHead key={`${role.id}-${a.key}`} className={`w-12 text-center font-normal ${i === 0 ? 'border-l' : ''}`}>
+                  {a.label}
+                </TableHead>
+              )))}
+            </TableRow>
+          </TableHeader>
 
-                {/* Super Admin — all checked, disabled */}
-                {superAdminRole && (
-                  <td className="px-4 py-3" colSpan={3}>
-                    <div className="flex justify-center gap-4">
-                      {ACTIONS.map((action) => (
-                        <Checkbox key={action.key} checked disabled className="w-4" />
-                      ))}
-                    </div>
-                  </td>
-                )}
+          <TableBody>
+            {RESOURCES.map(({ key: resource, label }) => (
+              <TableRow key={resource}>
+                <TableCell className="font-medium">{label}</TableCell>
 
-                {/* Editable roles */}
-                {editableRoles.map((role) => (
-                  <td key={role.id} className="px-4 py-3" colSpan={3}>
-                    <div className="flex justify-center gap-4">
-                      {ACTIONS.map((action) => {
-                        const permission = `${resource}:${action.key}`
-                        return (
-                          <Checkbox
-                            key={action.key}
-                            checked={perms[role.id]?.has(permission) ?? false}
-                            onCheckedChange={() => toggle(role.id, permission)}
-                            className="w-4"
-                          />
-                        )
-                      })}
-                    </div>
-                  </td>
+                {superAdminRole && ACTIONS.map((action, i) => (
+                  <TableCell key={action.key} className={`text-center ${i === 0 ? 'border-l' : ''}`}>
+                    <Checkbox checked disabled />
+                  </TableCell>
                 ))}
-              </tr>
+
+                {editableRoles.map((role) => ACTIONS.map((action, i) => {
+                  const permission = `${resource}:${action.key}`
+                  return (
+                    <TableCell key={`${role.id}-${action.key}`} className={`text-center ${i === 0 ? 'border-l' : ''}`}>
+                      <Checkbox
+                        checked={perms[role.id]?.has(permission) ?? false}
+                        onCheckedChange={() => toggle(role.id, permission)}
+                      />
+                    </TableCell>
+                  )
+                }))}
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <Dialog open={resetOpen} onOpenChange={setResetOpen}>
