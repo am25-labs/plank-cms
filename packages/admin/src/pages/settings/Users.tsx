@@ -93,8 +93,9 @@ const EMPTY_CREATE: CreateForm = { email: '', password: '', roleId: '' }
 
 export function SettingsUsers() {
   const { user: currentUser, updateUser } = useAuth()
-  const { data: users, loading, refetch } = useFetch<User[]>('/cms/admin/users')
-  const { data: roles } = useFetch<Role[]>('/cms/admin/roles')
+  const { data: users, loading: loadingUsers, refetch } = useFetch<User[]>('/cms/admin/users')
+  const { data: roles, loading: loadingRoles } = useFetch<Role[]>('/cms/admin/roles')
+  const loading = loadingUsers || loadingRoles
   const { request, loading: submitting, error: apiError } = useApi()
 
   const [createOpen, setCreateOpen] = useState(false)
