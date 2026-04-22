@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/auth.tsx'
 import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
@@ -30,6 +30,18 @@ export function Profile() {
   const [confirm, setConfirm] = useState('')
   const [pwSuccess, setPwSuccess] = useState(false)
   const [confirmError, setConfirmError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!profileSuccess) return
+    const t = setTimeout(() => setProfileSuccess(false), 3000)
+    return () => clearTimeout(t)
+  }, [profileSuccess])
+
+  useEffect(() => {
+    if (!pwSuccess) return
+    const t = setTimeout(() => setPwSuccess(false), 3000)
+    return () => clearTimeout(t)
+  }, [pwSuccess])
 
   async function handleProfileSubmit(e: React.FormEvent) {
     e.preventDefault()
