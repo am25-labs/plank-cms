@@ -19,8 +19,9 @@ import {
 import { listUsers, createUser, updateUser, deleteUser, getMe, updateMe, changePassword } from '../controllers/users.js'
 import { listRoles, updateRole, resetRoles } from '../controllers/roles.js'
 import { listApiTokens, createApiToken, deleteApiToken } from '../controllers/apiTokens.js'
-import { uploadMedia } from '../controllers/media.js'
+import { uploadMedia, listMedia, deleteMedia, getMediaUrl } from '../controllers/media.js'
 import { upload } from '../media/index.js'
+import { getNamespaceSettings, updateNamespaceSettings } from '../controllers/settings.js'
 
 const router: IRouter = Router()
 
@@ -63,6 +64,13 @@ router.post('/api-tokens', authorize('api-tokens:write'), createApiToken)
 router.delete('/api-tokens/:id', authorize('api-tokens:write'), deleteApiToken)
 
 // Media
+router.get('/media', authorize('media:read'), listMedia)
 router.post('/media', authorize('media:write'), upload.single('file'), uploadMedia)
+router.get('/media/:id/url', authorize('media:read'), getMediaUrl)
+router.delete('/media/:id', authorize('media:write'), deleteMedia)
+
+// Settings
+router.get('/settings/:namespace', authorize('settings:read'), getNamespaceSettings)
+router.put('/settings/:namespace', authorize('settings:write'), updateNamespaceSettings)
 
 export default router

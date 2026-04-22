@@ -5,6 +5,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'entries:read', 'entries:write', 'entries:delete',
     'media:read', 'media:write', 'media:delete',
     'users:read', 'users:write', 'users:delete',
+    'settings:read', 'settings:write',
   ],
   'User': [
     'entries:read', 'entries:write',
