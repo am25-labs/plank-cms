@@ -111,7 +111,7 @@ function LayoutShell() {
         </aside>
 
         {secondaryPanel && (
-          <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+          <aside className="flex h-full w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
             {secondaryPanel}
           </aside>
         )}
