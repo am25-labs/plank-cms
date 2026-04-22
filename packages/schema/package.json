@@ -1,0 +1,11 @@
+{
+  "name": "@plank/schema",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'No build step yet'",
+    "dev": "echo 'No dev step yet'",
+    "lint": "eslint src/"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@plank/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "build": "echo 'No build step yet'",
+    "dev": "node src/index.js",
+    "lint": "eslint src/"
+  }
+}
