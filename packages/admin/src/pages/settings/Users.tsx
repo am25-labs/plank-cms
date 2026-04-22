@@ -60,13 +60,16 @@ function RoleBadge({ roleId, roles }: { roleId: string; roles: Role[] }) {
 
 function UserActions({
   user,
+  currentUserId,
   onEdit,
   onDelete,
 }: {
   user: User
+  currentUserId: string
   onEdit: (user: User) => void
   onDelete: (user: User) => void
 }) {
+  const isSelf = user.id === currentUserId
   return (
     <div className="flex items-center gap-1">
       <Button size="icon" variant="ghost" className="size-8" onClick={() => onEdit(user)}>
@@ -75,7 +78,8 @@ function UserActions({
       <Button
         size="icon"
         variant="ghost"
-        className="size-8 text-destructive hover:text-destructive"
+        className="size-8 text-destructive hover:text-destructive disabled:opacity-30"
+        disabled={isSelf}
         onClick={() => onDelete(user)}
       >
         <Trash2Icon className="size-3.5" />
@@ -128,6 +132,7 @@ export function SettingsUsers() {
         cell: ({ row }) => (
           <UserActions
             user={row.original}
+            currentUserId={currentUser?.id ?? ''}
             onEdit={(u) => {
               setEditUser(u)
               setEditForm({

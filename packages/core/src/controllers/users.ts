@@ -125,6 +125,10 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
 }
 
 export async function deleteUser(req: Request, res: Response): Promise<void> {
+  if (req.params.id === req.user!.id) {
+    res.status(403).json({ error: 'You cannot delete your own account' }); return
+  }
+
   const { rows } = await pool.query<{ role_id: string }>(
     'SELECT role_id FROM plank_users WHERE id = $1',
     [req.params.id],
