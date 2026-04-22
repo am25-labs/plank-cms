@@ -205,6 +205,8 @@ export function ContentTypeForm() {
     .filter((ct) => ct.slug !== routeSlug)
     .map((ct) => ct.tableName)
 
+  const stringFields = fields.filter((f) => f.type === 'string')
+
   const existingFieldNames = fields.map((f) => f.name)
 
   if (!isNew && loadingExisting) {
@@ -304,6 +306,7 @@ export function ContentTypeForm() {
         onOpenChange={setAddOpen}
         existingNames={existingFieldNames}
         availableTables={availableTables}
+        stringFields={stringFields}
         onConfirm={handleAddField}
       />
 
@@ -313,6 +316,7 @@ export function ContentTypeForm() {
         onOpenChange={(val) => { if (!val) setEditingField(null) }}
         existingNames={existingFieldNames}
         availableTables={availableTables}
+        stringFields={stringFields}
         initialField={editingField ?? undefined}
         onConfirm={handleEditField}
       />

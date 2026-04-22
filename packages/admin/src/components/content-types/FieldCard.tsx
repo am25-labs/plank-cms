@@ -7,6 +7,7 @@ import {
   CalendarIcon,
   ImageIcon,
   LinkIcon,
+  FingerprintIcon,
   GripVerticalIcon,
   PencilIcon,
   Trash2Icon,
@@ -14,7 +15,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { DraggableSyntheticListeners } from '@dnd-kit/core'
 
-type FieldType = 'string' | 'text' | 'richtext' | 'number' | 'boolean' | 'datetime' | 'media' | 'relation'
+type FieldType = 'string' | 'text' | 'richtext' | 'number' | 'boolean' | 'datetime' | 'media' | 'relation' | 'uid'
 type NumberSubtype = 'integer' | 'float'
 export type FieldWidth = 'full' | 'half' | 'third'
 
@@ -24,6 +25,7 @@ export type FieldCardData = {
   required?: boolean
   subtype?: NumberSubtype
   relatedTable?: string
+  targetField?: string
   width?: FieldWidth
 }
 
@@ -57,6 +59,8 @@ function getFieldMeta(type: FieldType, subtype?: NumberSubtype): FieldMeta {
       return { icon: ImageIcon, label: 'Media', color: 'text-rose-600', bg: 'bg-rose-50' }
     case 'relation':
       return { icon: LinkIcon, label: 'Relation', color: 'text-indigo-600', bg: 'bg-indigo-50' }
+    case 'uid':
+      return { icon: FingerprintIcon, label: 'UID', color: 'text-teal-600', bg: 'bg-teal-50' }
   }
 }
 

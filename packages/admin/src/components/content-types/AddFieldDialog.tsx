@@ -8,6 +8,7 @@ import {
   CalendarIcon,
   ImageIcon,
   LinkIcon,
+  FingerprintIcon,
   ArrowLeftIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -31,6 +32,7 @@ import {
 import type { FieldCardData } from './FieldCard.tsx'
 
 type FieldType = FieldCardData['type']
+type StringField = { name: string }
 
 type TypeOption = {
   type: FieldType
@@ -51,27 +53,30 @@ const TYPE_OPTIONS: TypeOption[] = [
   { type: 'boolean',  icon: ToggleLeftIcon, label: 'Boolean',       description: 'True or false',                   color: 'text-emerald-600', bg: 'bg-emerald-50' },
   { type: 'datetime', icon: CalendarIcon,   label: 'Date & time',   description: 'Timestamps and dates',            color: 'text-amber-600',   bg: 'bg-amber-50'   },
   { type: 'media',    icon: ImageIcon,      label: 'Media',         description: 'Images, videos or files',         color: 'text-rose-600',    bg: 'bg-rose-50'    },
-  { type: 'relation', icon: LinkIcon,       label: 'Relation',      description: 'Link to another content type',    color: 'text-indigo-600',  bg: 'bg-indigo-50'  },
+  { type: 'uid',      icon: FingerprintIcon, label: 'UID',           description: 'Unique slug from a field',         color: 'text-teal-600',    bg: 'bg-teal-50'    },
+  { type: 'relation', icon: LinkIcon,        label: 'Relation',      description: 'Link to another content type',     color: 'text-indigo-600',  bg: 'bg-indigo-50'  },
 ]
 
 type ConfigState = {
   name: string
   required: boolean
   relatedTable: string
+  targetField: string
 }
 
-const EMPTY_CONFIG: ConfigState = { name: '', required: false, relatedTable: '' }
+const EMPTY_CONFIG: ConfigState = { name: '', required: false, relatedTable: '', targetField: '' }
 
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   existingNames: string[]
   availableTables: string[]
+  stringFields: StringField[]
   initialField?: FieldCardData
   onConfirm: (field: FieldCardData) => void
 }
 
-export function AddFieldDialog({ open, onOpenChange, existingNames, availableTables, initialField, onConfirm }: Props) {
+export function AddFieldDialog({ open, onOpenChange, existingNames, availableTables, stringFields, initialField, onConfirm }: Props) {
   const [selected, setSelected] = useState<TypeOption | null>(null)
   const [config, setConfig] = useState<ConfigState>(EMPTY_CONFIG)
   const [nameError, setNameError] = useState('')
@@ -93,6 +98,7 @@ export function AddFieldDialog({ open, onOpenChange, existingNames, availableTab
         name: initialField.name,
         required: initialField.required ?? false,
         relatedTable: initialField.relatedTable ?? '',
+        targetField: initialField.targetField ?? '',
       })
     }
     onOpenChange(val)
@@ -131,6 +137,7 @@ export function AddFieldDialog({ open, onOpenChange, existingNames, availableTab
       subtype: selected.subtype,
       required: config.required || undefined,
       relatedTable: selected.type === 'relation' ? config.relatedTable : undefined,
+      targetField: selected.type === 'uid' ? config.targetField : undefined,
       width: initialField?.width ?? 'full',
     })
     handleOpenChange(false)
@@ -202,6 +209,29 @@ export function AddFieldDialog({ open, onOpenChange, existingNames, availableTab
               {nameError && <p className="text-xs text-destructive">{nameError}</p>}
               <p className="text-xs text-muted-foreground">Lowercase letters, digits and underscores. Must start with a letter.</p>
             </div>
+
+            {selected?.type === 'uid' && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Source field</Label>
+                <p className="text-xs text-muted-foreground">The slug will be auto-generated from this field's value.</p>
+                {stringFields.length > 0 ? (
+                  <Select value={config.targetField} onValueChange={(v) => setConfig((prev) => ({ ...prev, targetField: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a text field" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stringFields.map((f) => (
+                        <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                    No short text fields available. Add a string field first.
+                  </p>
+                )}
+              </div>
+            )}
 
             {selected?.type === 'relation' && (
               <div className="flex flex-col gap-1.5">

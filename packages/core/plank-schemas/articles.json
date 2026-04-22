@@ -12,9 +12,10 @@
     },
     {
       "name": "slug",
-      "type": "string",
+      "type": "uid",
       "width": "half",
-      "required": true
+      "required": true,
+      "targetField": "title"
     },
     {
       "name": "published_at",
@@ -28,5 +29,5 @@
     }
   ],
   "createdAt": "2026-04-23T04:15:56.188Z",
-  "updatedAt": "2026-04-23T04:21:08.707Z"
+  "updatedAt": "2026-04-23T04:38:36.859Z"
 }
