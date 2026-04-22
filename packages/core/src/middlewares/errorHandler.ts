@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { ValidationError, SchemaError } from '@plank/schema'
-import { ZodError } from 'zod'
+import { ZodError, flattenError } from 'zod'
 
 export function errorHandler(
   err: unknown,
@@ -19,7 +19,7 @@ export function errorHandler(
   }
 
   if (err instanceof ZodError) {
-    res.status(400).json({ errors: err.flatten() })
+    res.status(400).json({ errors: flattenError(err, (i) => i.message) })
     return
   }
 

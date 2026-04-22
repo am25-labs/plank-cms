@@ -14,9 +14,9 @@ export function toPostgresType(field: FieldDefinition): string {
     case 'datetime':
       return 'TIMESTAMP'
     case 'media':
-      return 'INTEGER'
+      return 'TEXT'
     case 'relation':
-      return 'INTEGER'
+      return 'TEXT'
     default:
       throw new SchemaError(`Unknown field type: "${(field as FieldDefinition).type}"`)
   }

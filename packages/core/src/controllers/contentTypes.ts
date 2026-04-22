@@ -12,7 +12,7 @@ import {
   syncTable,
   assertSafeIdentifier,
 } from '@plank/schema'
-import { z } from 'zod'
+import { z, flattenError } from 'zod'
 
 const FieldSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]*$/, 'Field name must be lowercase with underscores'),
@@ -46,7 +46,7 @@ export const getContentType: SlugParam = async (req, res) => {
 export const createContentType: RequestHandler = async (req, res) => {
   const parsed = ContentTypeSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ errors: parsed.error.flatten() })
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
@@ -64,7 +64,7 @@ export const updateContentType: SlugParam = async (req, res) => {
 
   const parsed = ContentTypeSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ errors: parsed.error.flatten() })
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 

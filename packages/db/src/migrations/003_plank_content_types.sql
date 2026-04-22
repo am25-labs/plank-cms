@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS plank_content_types (
-  id         SERIAL PRIMARY KEY,
+  id         TEXT PRIMARY KEY,
   name       VARCHAR(255) NOT NULL UNIQUE,
   slug       VARCHAR(255) NOT NULL UNIQUE,
   table_name VARCHAR(255) NOT NULL UNIQUE,

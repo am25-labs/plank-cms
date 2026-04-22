@@ -1,1 +1,1 @@
-{"root":["./src/index.ts","./src/migrate.ts","./src/pool.ts"],"version":"6.0.3"}
+{"root":["./src/id.ts","./src/index.ts","./src/migrate.ts","./src/pool.ts","./src/reset.ts"],"version":"6.0.3"}

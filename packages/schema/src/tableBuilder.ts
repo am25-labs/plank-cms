@@ -16,7 +16,7 @@ export async function createTable(contentType: ContentType): Promise<void> {
 
   const sql = [
     `CREATE TABLE IF NOT EXISTS ${contentType.tableName} (`,
-    `  id         SERIAL PRIMARY KEY,`,
+    `  id         TEXT PRIMARY KEY,`,
     ...columns.map((col) => `  ${col},`),
     `  created_at TIMESTAMP NOT NULL DEFAULT NOW(),`,
     `  updated_at TIMESTAMP NOT NULL DEFAULT NOW()`,

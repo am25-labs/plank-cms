@@ -19,7 +19,7 @@ export interface FieldDefinition {
 }
 
 export interface ContentType {
-  id?: number
+  id?: string
   name: string
   slug: string
   tableName: string

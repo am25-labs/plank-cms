@@ -1,16 +1,16 @@
 import type { Request, Response } from 'express'
 import { randomBytes } from 'node:crypto'
-import { pool } from '@plank/db'
-import { z } from 'zod'
+import { pool, createId } from '@plank/db'
+import { z, flattenError } from 'zod'
 
 const CreateTokenSchema = z.object({
   name: z.string().min(1),
 })
 
-type TokenRow = { id: number; name: string; token: string; created_at: Date }
+type TokenRow = { id: string; name: string; created_at: Date }
 
 export async function listApiTokens(_req: Request, res: Response): Promise<void> {
-  const { rows } = await pool.query<Omit<TokenRow, 'token'>>(
+  const { rows } = await pool.query<TokenRow>(
     'SELECT id, name, created_at FROM plank_api_tokens ORDER BY created_at DESC',
   )
   res.json(rows)
@@ -19,18 +19,20 @@ export async function listApiTokens(_req: Request, res: Response): Promise<void>
 export async function createApiToken(req: Request, res: Response): Promise<void> {
   const parsed = CreateTokenSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ errors: parsed.error.flatten() })
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
+  const id = createId()
   const token = `plank_${randomBytes(32).toString('hex')}`
-  const { rows } = await pool.query<{ id: number }>(
-    'INSERT INTO plank_api_tokens (name, token, created_by) VALUES ($1, $2, $3) RETURNING id',
-    [parsed.data.name, token, req.user!.id],
+
+  await pool.query(
+    'INSERT INTO plank_api_tokens (id, name, token, created_by) VALUES ($1, $2, $3, $4)',
+    [id, parsed.data.name, token, req.user!.id],
   )
 
   // Token is returned once and never shown again
-  res.status(201).json({ id: rows[0].id, name: parsed.data.name, token })
+  res.status(201).json({ id, name: parsed.data.name, token })
 }
 
 export async function deleteApiToken(req: Request, res: Response): Promise<void> {

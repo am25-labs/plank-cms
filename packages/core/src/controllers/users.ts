@@ -1,15 +1,15 @@
 import type { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
-import { pool } from '@plank/db'
-import { z } from 'zod'
+import { pool, createId } from '@plank/db'
+import { z, flattenError } from 'zod'
 
 const CreateUserSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
-  roleId: z.number().int().positive(),
+  roleId: z.string().min(1),
 })
 
-type UserRow = { id: number; email: string; role_id: number; created_at: Date }
+type UserRow = { id: string; email: string; role_id: string; created_at: Date }
 
 export async function listUsers(_req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query<UserRow>(
@@ -21,16 +21,17 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
 export async function createUser(req: Request, res: Response): Promise<void> {
   const parsed = CreateUserSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ errors: parsed.error.flatten() })
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
   const { email, password, roleId } = parsed.data
   const hashed = await bcrypt.hash(password, 12)
+  const id = createId()
 
-  const { rows } = await pool.query<{ id: number }>(
-    'INSERT INTO plank_users (email, password, role_id) VALUES ($1, $2, $3) RETURNING id',
-    [email, hashed, roleId],
+  await pool.query(
+    'INSERT INTO plank_users (id, email, password, role_id) VALUES ($1, $2, $3, $4)',
+    [id, email, hashed, roleId],
   )
-  res.status(201).json({ id: rows[0].id, email, roleId })
+  res.status(201).json({ id, email, roleId })
 }

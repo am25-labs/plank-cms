@@ -1,7 +1,7 @@
 import { migrate } from '@plank/db'
 import app from './app.js'
 
-const PORT = process.env.PLANK_PORT ?? 1337
+const PORT = process.env.PLANK_PORT ?? 5500
 
 async function start(): Promise<void> {
   await migrate()

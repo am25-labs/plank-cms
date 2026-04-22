@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express'
-import { pool } from '@plank/db'
+import { pool, createId } from '@plank/db'
 import { findContentTypeBySlug, validate, assertSafeIdentifier } from '@plank/schema'
 
 type SlugParam = RequestHandler<{ slug: string }>
@@ -43,9 +43,10 @@ export const createEntry: SlugParam = async (req, res) => {
   const fields = ct.fields.filter((f) => req.body[f.name] !== undefined)
   fields.forEach((f) => assertSafeIdentifier(f.name))
 
-  const cols = fields.map((f) => f.name).join(', ')
-  const placeholders = fields.map((_, i) => `$${i + 1}`).join(', ')
-  const values = fields.map((f) => req.body[f.name])
+  const id = createId()
+  const cols = ['id', ...fields.map((f) => f.name)].join(', ')
+  const placeholders = ['$1', ...fields.map((_, i) => `$${i + 2}`)].join(', ')
+  const values = [id, ...fields.map((f) => req.body[f.name])]
 
   const { rows } = await pool.query(
     `INSERT INTO ${ct.tableName} (${cols}) VALUES (${placeholders}) RETURNING *`,

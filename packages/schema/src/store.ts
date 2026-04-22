@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { pool } from '@plank/db'
+import { pool, createId } from '@plank/db'
 import type { ContentType } from './types.js'
 
 function schemasDir(): string {
@@ -15,7 +15,7 @@ async function ensureSchemasDir(): Promise<void> {
   await mkdir(schemasDir(), { recursive: true })
 }
 
-// ── Disk ────────────────────────────────────────────────────────────────────
+// ── Disk ─────────────────────────────────────────────────────────────────────
 
 async function writeToDisk(contentType: ContentType): Promise<void> {
   await ensureSchemasDir()
@@ -27,10 +27,10 @@ async function readFromDisk(slug: string): Promise<ContentType> {
   return JSON.parse(raw) as ContentType
 }
 
-// ── Database ─────────────────────────────────────────────────────────────────
+// ── Database ──────────────────────────────────────────────────────────────────
 
 type ContentTypeRow = {
-  id: number
+  id: string
   name: string
   slug: string
   table_name: string
@@ -51,7 +51,7 @@ function rowToContentType(row: ContentTypeRow): ContentType {
   }
 }
 
-// ── Public CRUD ──────────────────────────────────────────────────────────────
+// ── Public CRUD ───────────────────────────────────────────────────────────────
 
 export async function findAllContentTypes(): Promise<ContentType[]> {
   const { rows } = await pool.query<ContentTypeRow>(
@@ -70,10 +70,10 @@ export async function findContentTypeBySlug(slug: string): Promise<ContentType |
 
 export async function saveContentType(contentType: ContentType): Promise<ContentType> {
   const { rows } = await pool.query<ContentTypeRow>(
-    `INSERT INTO plank_content_types (name, slug, table_name, fields)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO plank_content_types (id, name, slug, table_name, fields)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [contentType.name, contentType.slug, contentType.tableName, JSON.stringify(contentType.fields)],
+    [createId(), contentType.name, contentType.slug, contentType.tableName, JSON.stringify(contentType.fields)],
   )
   const saved = rowToContentType(rows[0])
   await writeToDisk(saved)

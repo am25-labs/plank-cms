@@ -1,28 +1,27 @@
 import type { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { pool } from '@plank/db'
-import { z } from 'zod'
+import { pool, createId } from '@plank/db'
+import { z, flattenError } from 'zod'
 
 const LoginSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(1),
 })
 
 const RegisterSchema = z.object({
-  email: z.string().email(),
+  email: z.email(),
   password: z.string().min(8),
 })
 
-type UserRow = { id: number; password: string; role_id: number }
+type UserRow = { id: string; password: string; role_id: string }
 type CountRow = { count: string }
-type RoleRow = { id: number }
-type InsertedUser = { id: number }
+type RoleRow = { id: string }
 
 export async function login(req: Request, res: Response): Promise<void> {
   const parsed = LoginSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ errors: parsed.error.flatten() })
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
@@ -56,7 +55,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   const parsed = RegisterSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ errors: parsed.error.flatten() })
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
@@ -68,10 +67,11 @@ export async function register(req: Request, res: Response): Promise<void> {
     ['admin'],
   )
 
-  const { rows } = await pool.query<InsertedUser>(
-    'INSERT INTO plank_users (email, password, role_id) VALUES ($1, $2, $3) RETURNING id',
-    [email, hashed, roleRows[0].id],
+  const id = createId()
+  await pool.query(
+    'INSERT INTO plank_users (id, email, password, role_id) VALUES ($1, $2, $3, $4)',
+    [id, email, hashed, roleRows[0].id],
   )
 
-  res.status(201).json({ id: rows[0].id, email })
+  res.status(201).json({ id, email })
 }

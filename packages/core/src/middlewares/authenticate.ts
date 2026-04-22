@@ -2,8 +2,8 @@ import type { Request, Response, NextFunction } from 'express'
 import jwt from 'jsonwebtoken'
 
 interface JwtPayload {
-  sub: number
-  roleId: number
+  sub: string
+  roleId: string
 }
 
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
