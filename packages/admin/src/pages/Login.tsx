@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label.tsx'
 
 interface AuthResponse {
   token: string
-  user: { id: string; email: string; role: string }
+  user: { id: string; email: string; role: string; firstName: string | null; lastName: string | null }
 }
 
 export function Login() {
