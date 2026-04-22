@@ -8,6 +8,9 @@ import { ContentTypeBuilder } from './pages/ContentTypeBuilder.tsx'
 import { ContentManager } from './pages/ContentManager.tsx'
 import { MediaLibrary } from './pages/MediaLibrary.tsx'
 import { Settings } from './pages/Settings.tsx'
+import { SettingsUsers } from './pages/settings/Users.tsx'
+import { SettingsRoles } from './pages/settings/Roles.tsx'
+import { SettingsApiTokens } from './pages/settings/ApiTokens.tsx'
 import { Profile } from './pages/Profile.tsx'
 
 export default function App() {
@@ -28,7 +31,12 @@ export default function App() {
             <Route path="content-types" element={<ContentTypeBuilder />} />
             <Route path="content" element={<ContentManager />} />
             <Route path="media" element={<MediaLibrary />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="settings" element={<Settings />}>
+              <Route index element={<Navigate to="users" replace />} />
+              <Route path="users" element={<SettingsUsers />} />
+              <Route path="roles" element={<SettingsRoles />} />
+              <Route path="api-tokens" element={<SettingsApiTokens />} />
+            </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
