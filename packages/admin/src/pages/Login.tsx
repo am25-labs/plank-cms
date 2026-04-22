@@ -38,18 +38,23 @@ export function Login() {
       return
     }
 
-    if (needsSetup) {
-      await request('/cms/auth/register', 'POST', { email, password })
+    try {
+      if (needsSetup) {
+        await request('/cms/auth/register', 'POST', { email, password })
+      }
+      const res = await request('/cms/auth/login', 'POST', { email, password })
+      login(res.user, res.token)
+      navigate('/')
+    } catch {
+      setValidationError(
+        needsSetup ? (error ?? 'Could not create account.') : 'Invalid email or password.',
+      )
     }
-
-    const res = await request('/cms/auth/login', 'POST', { email, password })
-    login(res.user, res.token)
-    navigate('/')
   }
 
   if (needsSetup === null) return null
 
-  const displayError = validationError ?? error
+  const displayError = validationError
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">

@@ -32,9 +32,22 @@ export function useApi<T = unknown>() {
         const text = await res.text()
         let message: string
         try {
-          message = (JSON.parse(text) as { message?: string }).message ?? text
+          const json = JSON.parse(text) as {
+            message?: string
+            errors?: { formErrors?: string[]; fieldErrors?: Record<string, string[]> }
+          }
+          if (json.message) {
+            message = json.message
+          } else if (json.errors) {
+            const fieldMsgs = Object.values(json.errors.fieldErrors ?? {}).flat()
+            const formMsgs = json.errors.formErrors ?? []
+            const all = [...formMsgs, ...fieldMsgs]
+            message = all.length ? all.join(' · ') : 'Something went wrong.'
+          } else {
+            message = 'Something went wrong.'
+          }
         } catch {
-          message = text
+          message = 'Something went wrong.'
         }
         throw new Error(message)
       }
