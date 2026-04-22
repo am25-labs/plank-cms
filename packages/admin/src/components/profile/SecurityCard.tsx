@@ -24,7 +24,7 @@ export function SecurityCard() {
     setConfirmError(null)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     setConfirmError(null)
     if (newPassword !== confirm) {
@@ -34,7 +34,9 @@ export function SecurityCard() {
     try {
       await request('/cms/admin/users/me/password', 'PATCH', { currentPassword, newPassword })
       handleClose()
-    } catch { /* error shown via pwError */ }
+    } catch {
+      /* error shown via pwError */
+    }
   }
 
   return (
@@ -42,13 +44,13 @@ export function SecurityCard() {
       <Card>
         <CardHeader>
           <CardTitle className="uppercase">Security</CardTitle>
-          {open && (
-            <CardAction>
+          <CardAction>
+            {open && (
               <Button variant="ghost" size="icon" onClick={handleClose}>
                 <XIcon className="size-4" />
               </Button>
-            </CardAction>
-          )}
+            )}
+          </CardAction>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4">
@@ -61,7 +63,7 @@ export function SecurityCard() {
           </div>
 
           <CollapsibleContent>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+            <form onSubmit={handleSubmit} className="space-y-4 mt-8">
               <div className="space-y-1.5">
                 <Label htmlFor="current">Current password</Label>
                 <Input

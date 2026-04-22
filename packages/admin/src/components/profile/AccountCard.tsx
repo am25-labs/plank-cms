@@ -34,7 +34,7 @@ export function AccountCard() {
     setEditing(!editing)
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     try {
       const updated = await request('/cms/admin/users/me', 'PATCH', { firstName, lastName })
