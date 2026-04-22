@@ -5,6 +5,11 @@
   "tableName": "articles",
   "fields": [
     {
+      "name": "cover",
+      "type": "media",
+      "width": "full"
+    },
+    {
       "name": "title",
       "type": "string",
       "width": "full",
@@ -35,5 +40,5 @@
   ],
   "isDefault": true,
   "createdAt": "2026-04-23T04:15:56.188Z",
-  "updatedAt": "2026-04-23T05:02:07.062Z"
+  "updatedAt": "2026-04-23T05:35:02.173Z"
 }
