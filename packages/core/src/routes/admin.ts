@@ -15,7 +15,7 @@ import {
   updateEntry,
   deleteEntry,
 } from '../controllers/entries.js'
-import { listUsers, createUser } from '../controllers/users.js'
+import { listUsers, createUser, getMe, changePassword } from '../controllers/users.js'
 import { listApiTokens, createApiToken, deleteApiToken } from '../controllers/apiTokens.js'
 import { uploadMedia } from '../controllers/media.js'
 import { upload } from '../media/index.js'
@@ -37,6 +37,10 @@ router.post('/content-types/:slug/entries', authorize('entries:write'), createEn
 router.get('/entries/:slug/:id', authorize('entries:read'), getEntry)
 router.put('/entries/:slug/:id', authorize('entries:write'), updateEntry)
 router.delete('/entries/:slug/:id', authorize('entries:write'), deleteEntry)
+
+// Current user profile
+router.get('/users/me', getMe)
+router.patch('/users/me/password', changePassword)
 
 // Users
 router.get('/users', authorize('users:read'), listUsers)

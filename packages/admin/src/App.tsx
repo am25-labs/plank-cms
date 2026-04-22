@@ -8,6 +8,7 @@ import { ContentTypeBuilder } from './pages/ContentTypeBuilder.tsx'
 import { ContentManager } from './pages/ContentManager.tsx'
 import { MediaLibrary } from './pages/MediaLibrary.tsx'
 import { Settings } from './pages/Settings.tsx'
+import { Profile } from './pages/Profile.tsx'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
+            <Route path="profile" element={<Profile />} />
             <Route path="content-types" element={<ContentTypeBuilder />} />
             <Route path="content" element={<ContentManager />} />
             <Route path="media" element={<MediaLibrary />} />

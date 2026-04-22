@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboardIcon,
   LayersIcon,
@@ -41,6 +41,7 @@ function initials(email: string) {
 export function Layout() {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
+  const navigate = useNavigate()
 
   function isActive(to: string) {
     return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
@@ -88,7 +89,7 @@ export function Layout() {
                 <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
                 <UserRoundIcon />
                 Profile
               </DropdownMenuItem>
