@@ -2,10 +2,11 @@
   "name": "@plank/core",
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "echo 'No build step yet'",
-    "dev": "node src/index.js",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
     "lint": "eslint src/"
   }
 }

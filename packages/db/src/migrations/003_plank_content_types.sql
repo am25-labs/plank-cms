@@ -1,0 +1,9 @@
+CREATE TABLE IF NOT EXISTS plank_content_types (
+  id         SERIAL PRIMARY KEY,
+  name       VARCHAR(255) NOT NULL UNIQUE,
+  slug       VARCHAR(255) NOT NULL UNIQUE,
+  table_name VARCHAR(255) NOT NULL UNIQUE,
+  fields     JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);

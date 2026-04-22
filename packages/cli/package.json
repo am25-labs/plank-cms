@@ -2,13 +2,14 @@
   "name": "@plank/cli",
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
-    "plank": "./src/index.js"
+    "plank": "./dist/index.js"
   },
   "scripts": {
-    "build": "echo 'No build step yet'",
-    "dev": "echo 'No dev step yet'",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
     "lint": "eslint src/"
   }
 }

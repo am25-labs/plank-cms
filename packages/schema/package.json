@@ -2,10 +2,11 @@
   "name": "@plank/schema",
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "build": "echo 'No build step yet'",
-    "dev": "echo 'No dev step yet'",
+    "build": "tsc",
+    "dev": "tsc --watch",
     "lint": "eslint src/"
   }
 }
