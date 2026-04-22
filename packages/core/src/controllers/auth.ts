@@ -86,6 +86,11 @@ export async function login(req: Request, res: Response): Promise<void> {
   })
 }
 
+export async function setup(_req: Request, res: Response): Promise<void> {
+  const { rows } = await pool.query<CountRow>('SELECT COUNT(*) as count FROM plank_users')
+  res.json({ needsSetup: parseInt(rows[0].count) === 0 })
+}
+
 export async function register(req: Request, res: Response): Promise<void> {
   const { rows: countRows } = await pool.query<CountRow>('SELECT COUNT(*) as count FROM plank_users')
   if (parseInt(countRows[0].count) > 0) {
