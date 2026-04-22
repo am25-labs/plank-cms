@@ -24,17 +24,25 @@ async function appliedMigrations(client: PoolClient): Promise<Set<string>> {
   return new Set(rows.map((r) => r.filename))
 }
 
-async function seedDefaultRole(client: PoolClient): Promise<void> {
+async function seedDefaultRoles(client: PoolClient): Promise<void> {
   const { rows } = await client.query<{ count: string }>(
     'SELECT COUNT(*) as count FROM plank_roles',
   )
   if (parseInt(rows[0].count) > 0) return
 
-  await client.query(
-    'INSERT INTO plank_roles (id, name, permissions) VALUES ($1, $2, $3)',
-    [createId(), 'admin', JSON.stringify(['*'])],
-  )
-  console.log('[plank/db] Seeded default admin role.')
+  const roles = [
+    { name: 'Super Admin', permissions: ['*'] },
+    { name: 'Admin', permissions: ['content-types:read', 'content-types:write', 'entries:read', 'entries:write', 'media:read', 'media:write', 'users:read'] },
+    { name: 'User', permissions: ['entries:read', 'media:read'] },
+  ]
+
+  for (const role of roles) {
+    await client.query(
+      'INSERT INTO plank_roles (id, name, permissions) VALUES ($1, $2, $3)',
+      [createId(), role.name, JSON.stringify(role.permissions)],
+    )
+  }
+  console.log('[plank/db] Seeded default roles.')
 }
 
 export async function migrate(): Promise<void> {
@@ -60,7 +68,7 @@ export async function migrate(): Promise<void> {
       console.log(`[plank/db] Applied migration: ${file}`)
     }
 
-    await seedDefaultRole(client)
+    await seedDefaultRoles(client)
     await client.query('COMMIT')
     console.log('[plank/db] Migrations up to date.')
   } catch (err) {

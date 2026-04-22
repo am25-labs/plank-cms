@@ -44,25 +44,25 @@ type Role = { id: string; name: string }
 type CreateForm = { email: string; password: string; roleId: string }
 type EditForm = { email: string; roleId: string; firstName: string; lastName: string }
 
+const ROLE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
+  'super admin': 'default',
+  'admin': 'secondary',
+  'user': 'outline',
+}
+
 function RoleBadge({ roleId, roles }: { roleId: string; roles: Role[] }) {
   const role = roles.find((r) => r.id === roleId)
   const name = role?.name ?? roleId
-  const isAdmin = name.toLowerCase() === 'admin'
-  return (
-    <Badge variant={isAdmin ? 'default' : 'secondary'}>
-      {isAdmin ? name.toUpperCase() : name}
-    </Badge>
-  )
+  const variant = ROLE_VARIANT[name.toLowerCase()] ?? 'secondary'
+  return <Badge variant={variant}>{name}</Badge>
 }
 
 function UserActions({
   user,
-  roles,
   onEdit,
   onDelete,
 }: {
   user: User
-  roles: Role[]
   onEdit: (user: User) => void
   onDelete: (user: User) => void
 }) {
@@ -126,7 +126,6 @@ export function SettingsUsers() {
         cell: ({ row }) => (
           <UserActions
             user={row.original}
-            roles={roleList}
             onEdit={(u) => {
               setEditUser(u)
               setEditForm({
@@ -146,7 +145,7 @@ export function SettingsUsers() {
 
   const table = useReactTable({ data: users ?? [], columns, getCoreRowModel: getCoreRowModel() })
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: React.SyntheticEvent) {
     e.preventDefault()
     try {
       await request('/cms/admin/users', 'POST', createForm)
@@ -156,7 +155,7 @@ export function SettingsUsers() {
     } catch { /* error shown via apiError */ }
   }
 
-  async function handleEdit(e: React.FormEvent) {
+  async function handleEdit(e: React.SyntheticEvent) {
     e.preventDefault()
     try {
       await request(`/cms/admin/users/${editUser!.id}`, 'PUT', editForm)
@@ -270,7 +269,7 @@ export function SettingsUsers() {
                 <SelectContent>
                   {roleList.map((role) => (
                     <SelectItem key={role.id} value={role.id}>
-                      {role.name}
+                      {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -334,7 +333,7 @@ export function SettingsUsers() {
                 <SelectContent>
                   {roleList.map((role) => (
                     <SelectItem key={role.id} value={role.id}>
-                      {role.name}
+                      {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
                     </SelectItem>
                   ))}
                 </SelectContent>

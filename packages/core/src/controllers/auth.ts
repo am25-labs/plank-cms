@@ -115,7 +115,7 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   const { rows: roleRows } = await pool.query<RoleRow>(
     'SELECT id, name FROM plank_roles WHERE name = $1',
-    ['admin'],
+    ['Super Admin'],
   )
 
   const id = createId()
