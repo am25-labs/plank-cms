@@ -11,12 +11,17 @@ import { errorHandler } from './middlewares/errorHandler.js'
 const app: Express = express()
 
 app.use(helmet())
-app.use(cors())
 app.use(express.json())
 
-app.use('/cms/auth', authRouter)
-app.use('/cms/admin', adminRouter)
-app.use('/api', publicRouter)
+// /cms/* is only accessible from the admin panel origin
+const adminOrigin = process.env.PLANK_PUBLIC_URL ?? 'http://localhost:3000'
+const cmsCorOptions = cors({ origin: adminOrigin, credentials: true })
+
+app.use('/cms/auth', cmsCorOptions, authRouter)
+app.use('/cms/admin', cmsCorOptions, adminRouter)
+
+// /api/* is public — any origin can consume it (headless CMS)
+app.use('/api', cors(), publicRouter)
 
 // Serve admin panel static files in production
 if (process.env.NODE_ENV === 'production') {

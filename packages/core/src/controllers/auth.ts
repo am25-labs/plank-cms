@@ -14,11 +14,41 @@ const RegisterSchema = z.object({
   password: z.string().min(8),
 })
 
-type UserRow = { id: string; password: string; role_id: string }
+type UserRow = { id: string; email: string; password: string; role_id: string }
 type CountRow = { count: string }
-type RoleRow = { id: string }
+type RoleRow = { id: string; name: string }
+
+const loginAttempts = new Map<string, { count: number; resetAt: number }>()
+
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const entry = loginAttempts.get(ip)
+
+  if (!entry || now > entry.resetAt) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    return true
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX) return false
+
+  entry.count++
+  return true
+}
+
+function clearRateLimit(ip: string): void {
+  loginAttempts.delete(ip)
+}
 
 export async function login(req: Request, res: Response): Promise<void> {
+  const ip = req.ip ?? 'unknown'
+  if (!checkRateLimit(ip)) {
+    res.status(429).json({ error: 'Too many login attempts. Try again in 15 minutes.' })
+    return
+  }
+
   const parsed = LoginSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
@@ -27,7 +57,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const { email, password } = parsed.data
   const { rows } = await pool.query<UserRow>(
-    'SELECT id, password, role_id FROM plank_users WHERE email = $1',
+    'SELECT id, email, password, role_id FROM plank_users WHERE email = $1',
     [email],
   )
 
@@ -37,13 +67,23 @@ export async function login(req: Request, res: Response): Promise<void> {
     return
   }
 
+  const { rows: roleRows } = await pool.query<RoleRow>(
+    'SELECT id, name FROM plank_roles WHERE id = $1',
+    [user.role_id],
+  )
+
+  clearRateLimit(ip)
+
   const token = jwt.sign(
     { sub: user.id, roleId: user.role_id },
     process.env.PLANK_JWT_SECRET!,
     { expiresIn: '7d' },
   )
 
-  res.json({ token })
+  res.json({
+    token,
+    user: { id: user.id, email: user.email, role: roleRows[0]?.name ?? 'unknown' },
+  })
 }
 
 export async function register(req: Request, res: Response): Promise<void> {
@@ -63,7 +103,7 @@ export async function register(req: Request, res: Response): Promise<void> {
   const hashed = await bcrypt.hash(password, 12)
 
   const { rows: roleRows } = await pool.query<RoleRow>(
-    'SELECT id FROM plank_roles WHERE name = $1',
+    'SELECT id, name FROM plank_roles WHERE name = $1',
     ['admin'],
   )
 
