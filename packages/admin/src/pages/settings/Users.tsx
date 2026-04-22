@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
+import { useAuth } from '@/context/auth.tsx'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
@@ -86,6 +87,7 @@ function UserActions({
 const EMPTY_CREATE: CreateForm = { email: '', password: '', roleId: '' }
 
 export function SettingsUsers() {
+  const { user: currentUser, updateUser } = useAuth()
   const { data: users, loading, refetch } = useFetch<User[]>('/cms/admin/users')
   const { data: roles } = useFetch<Role[]>('/cms/admin/roles')
   const { request, loading: submitting, error: apiError } = useApi()
@@ -159,6 +161,13 @@ export function SettingsUsers() {
     e.preventDefault()
     try {
       await request(`/cms/admin/users/${editUser!.id}`, 'PUT', editForm)
+      if (editUser!.id === currentUser?.id) {
+        updateUser({
+          email: editForm.email,
+          firstName: editForm.firstName || null,
+          lastName: editForm.lastName || null,
+        })
+      }
       setEditUser(null)
       refetch()
     } catch { /* error shown via apiError */ }
