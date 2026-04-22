@@ -57,7 +57,7 @@ export function AccountCard() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 -mt-4">
             <Avatar className="size-20">
               <AvatarFallback className="text-xl">
                 {getInitials(user?.firstName ?? null, user?.lastName ?? null, user?.email ?? '')}
