@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 import { useAuth } from '@/context/auth.tsx'
+import { Spinner } from '@/components/ui/spinner.tsx'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
@@ -217,8 +218,8 @@ export function SettingsUsers() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  Loading…
+                <TableCell colSpan={columns.length} className="h-24">
+                  <Spinner className="mx-auto size-5" />
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length === 0 ? (

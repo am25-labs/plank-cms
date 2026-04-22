@@ -3,6 +3,7 @@ import { RotateCcwIcon, SaveIcon } from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { useAuth } from '@/context/auth.tsx'
+import { Spinner } from '@/components/ui/spinner.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import {
@@ -83,10 +84,6 @@ export function SettingsRoles() {
   const editableRoles = (roles ?? []).filter((r) => r.name !== 'Super Admin')
   const superAdminRole = (roles ?? []).find((r) => r.name === 'Super Admin')
 
-  if (loading) {
-    return <p className="text-sm text-muted-foreground">Loading…</p>
-  }
-
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -152,7 +149,13 @@ export function SettingsRoles() {
           </TableHeader>
 
           <TableBody>
-            {RESOURCES.map(({ key: resource, label }) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={99} className="h-24">
+                  <Spinner className="mx-auto size-5" />
+                </TableCell>
+              </TableRow>
+            ) : RESOURCES.map(({ key: resource, label }) => (
               <TableRow key={resource}>
                 <TableCell className="font-medium">{label}</TableCell>
 
