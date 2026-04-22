@@ -9,6 +9,13 @@ const CreateUserSchema = z.object({
   roleId: z.string().min(1),
 })
 
+const UpdateUserSchema = z.object({
+  email: z.email().optional(),
+  roleId: z.string().min(1).optional(),
+  firstName: z.string().max(100).nullable().optional(),
+  lastName: z.string().max(100).nullable().optional(),
+})
+
 const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
@@ -93,4 +100,35 @@ export async function createUser(req: Request, res: Response): Promise<void> {
     [id, email, hashed, roleId],
   )
   res.status(201).json({ id, email, roleId })
+}
+
+export async function updateUser(req: Request, res: Response): Promise<void> {
+  const parsed = UpdateUserSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
+    return
+  }
+
+  const { email, roleId, firstName, lastName } = parsed.data
+  const { rows } = await pool.query<UserRow>(
+    `UPDATE plank_users
+     SET email      = COALESCE($1, email),
+         role_id    = COALESCE($2, role_id),
+         first_name = COALESCE($3, first_name),
+         last_name  = COALESCE($4, last_name)
+     WHERE id = $5
+     RETURNING id, email, role_id, first_name, last_name, created_at`,
+    [email ?? null, roleId ?? null, firstName ?? null, lastName ?? null, req.params.id],
+  )
+  if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
+  res.json(rows[0])
+}
+
+export async function deleteUser(req: Request, res: Response): Promise<void> {
+  const { rowCount } = await pool.query(
+    'DELETE FROM plank_users WHERE id = $1',
+    [req.params.id],
+  )
+  if (!rowCount) { res.status(404).json({ error: 'User not found' }); return }
+  res.status(204).end()
 }

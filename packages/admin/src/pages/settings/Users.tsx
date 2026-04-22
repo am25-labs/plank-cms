@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
-import { PlusIcon } from 'lucide-react'
+import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
@@ -39,74 +39,138 @@ type User = {
   created_at: string
 }
 
-type Role = {
-  id: string
-  name: string
+type Role = { id: string; name: string }
+
+type CreateForm = { email: string; password: string; roleId: string }
+type EditForm = { email: string; roleId: string; firstName: string; lastName: string }
+
+function RoleBadge({ roleId, roles }: { roleId: string; roles: Role[] }) {
+  const role = roles.find((r) => r.id === roleId)
+  const name = role?.name ?? roleId
+  const isAdmin = name.toLowerCase() === 'admin'
+  return (
+    <Badge variant={isAdmin ? 'default' : 'secondary'}>
+      {isAdmin ? name.toUpperCase() : name}
+    </Badge>
+  )
 }
 
-const COLUMNS: ColumnDef<User>[] = [
-  {
-    accessorKey: 'email',
-    header: 'Email',
-  },
-  {
-    id: 'name',
-    header: 'Name',
-    cell: ({ row }) => {
-      const { first_name, last_name } = row.original
-      if (!first_name && !last_name) return <span className="text-muted-foreground">—</span>
-      return [first_name, last_name].filter(Boolean).join(' ')
-    },
-  },
-  {
-    accessorKey: 'role_id',
-    header: 'Role',
-    cell: ({ getValue }) => (
-      <Badge variant="secondary" className="capitalize">
-        {getValue<string>()}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: 'created_at',
-    header: 'Created',
-    cell: ({ getValue }) =>
-      new Date(getValue<string>()).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      }),
-  },
-]
+function UserActions({
+  user,
+  roles,
+  onEdit,
+  onDelete,
+}: {
+  user: User
+  roles: Role[]
+  onEdit: (user: User) => void
+  onDelete: (user: User) => void
+}) {
+  return (
+    <div className="flex items-center gap-1">
+      <Button size="icon" variant="ghost" className="size-8" onClick={() => onEdit(user)}>
+        <PencilIcon className="size-3.5" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        className="size-8 text-destructive hover:text-destructive"
+        onClick={() => onDelete(user)}
+      >
+        <Trash2Icon className="size-3.5" />
+      </Button>
+    </div>
+  )
+}
+
+const EMPTY_CREATE: CreateForm = { email: '', password: '', roleId: '' }
 
 export function SettingsUsers() {
   const { data: users, loading, refetch } = useFetch<User[]>('/cms/admin/users')
   const { data: roles } = useFetch<Role[]>('/cms/admin/roles')
-  const { request, loading: submitting, error } = useApi()
+  const { request, loading: submitting, error: apiError } = useApi()
 
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '', roleId: '' })
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_CREATE)
 
-  const table = useReactTable({
-    data: users ?? [],
-    columns: COLUMNS,
-    getCoreRowModel: getCoreRowModel(),
-  })
+  const [editUser, setEditUser] = useState<User | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({ email: '', roleId: '', firstName: '', lastName: '' })
 
-  function handleChange(field: keyof typeof form, value: string) {
-    setForm((prev) => ({ ...prev, [field]: value }))
-  }
+  const [deleteUser, setDeleteUser] = useState<User | null>(null)
 
-  async function handleSubmit(e: React.FormEvent) {
+  const roleList = roles ?? []
+
+  const columns = useMemo<ColumnDef<User>[]>(
+    () => [
+      {
+        id: 'name',
+        header: 'Name',
+        cell: ({ row }) => {
+          const { first_name, last_name } = row.original
+          if (!first_name && !last_name) return <span className="text-muted-foreground">—</span>
+          return [first_name, last_name].filter(Boolean).join(' ')
+        },
+      },
+      {
+        accessorKey: 'email',
+        header: 'Email',
+      },
+      {
+        accessorKey: 'role_id',
+        header: 'Role',
+        cell: ({ getValue }) => <RoleBadge roleId={getValue<string>()} roles={roleList} />,
+      },
+      {
+        id: 'actions',
+        header: '',
+        cell: ({ row }) => (
+          <UserActions
+            user={row.original}
+            roles={roleList}
+            onEdit={(u) => {
+              setEditUser(u)
+              setEditForm({
+                email: u.email,
+                roleId: u.role_id,
+                firstName: u.first_name ?? '',
+                lastName: u.last_name ?? '',
+              })
+            }}
+            onDelete={setDeleteUser}
+          />
+        ),
+      },
+    ],
+    [roleList],
+  )
+
+  const table = useReactTable({ data: users ?? [], columns, getCoreRowModel: getCoreRowModel() })
+
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     try {
-      await request('/cms/admin/users', 'POST', form)
-      setOpen(false)
-      setForm({ email: '', password: '', roleId: '' })
+      await request('/cms/admin/users', 'POST', createForm)
+      setCreateOpen(false)
+      setCreateForm(EMPTY_CREATE)
       refetch()
-    } catch {
-      // error already set in useApi state
-    }
+    } catch { /* error shown via apiError */ }
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault()
+    try {
+      await request(`/cms/admin/users/${editUser!.id}`, 'PUT', editForm)
+      setEditUser(null)
+      refetch()
+    } catch { /* error shown via apiError */ }
+  }
+
+  async function handleDelete() {
+    try {
+      await request(`/cms/admin/users/${deleteUser!.id}`, 'DELETE')
+      setDeleteUser(null)
+      refetch()
+    } catch { /* error shown via apiError */ }
   }
 
   return (
@@ -115,10 +179,10 @@ export function SettingsUsers() {
         <div>
           <h1 className="text-3xl font-bold">Users</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Manage who has access to the admin panel
+            Manage who has access to the admin panel.
           </p>
         </div>
-        <Button size="sm" onClick={() => setOpen(true)}>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
           <PlusIcon className="size-4" />
           New user
         </Button>
@@ -140,19 +204,13 @@ export function SettingsUsers() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell
-                  colSpan={COLUMNS.length}
-                  className="h-24 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={COLUMNS.length}
-                  className="h-24 text-center text-muted-foreground"
-                >
+                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                   No users found.
                 </TableCell>
               </TableRow>
@@ -171,42 +229,46 @@ export function SettingsUsers() {
         </Table>
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Create dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New user</DialogTitle>
           </DialogHeader>
-          <form id="new-user-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <form id="create-user-form" onSubmit={handleCreate} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="c-email">Email</Label>
               <Input
-                id="email"
+                id="c-email"
                 type="email"
                 placeholder="user@example.com"
-                value={form.email}
-                onChange={(e) => handleChange('email', e.target.value)}
+                value={createForm.email}
+                onChange={(e) => setCreateForm((p) => ({ ...p, email: e.target.value }))}
                 required
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="c-password">Password</Label>
               <Input
-                id="password"
+                id="c-password"
                 type="password"
                 placeholder="Min. 8 characters"
-                value={form.password}
-                onChange={(e) => handleChange('password', e.target.value)}
+                value={createForm.password}
+                onChange={(e) => setCreateForm((p) => ({ ...p, password: e.target.value }))}
                 required
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="role">Role</Label>
-              <Select value={form.roleId} onValueChange={(v) => handleChange('roleId', v)} required>
-                <SelectTrigger id="role">
+              <Label htmlFor="c-role">Role</Label>
+              <Select
+                value={createForm.roleId}
+                onValueChange={(v) => setCreateForm((p) => ({ ...p, roleId: v }))}
+              >
+                <SelectTrigger id="c-role">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(roles ?? []).map((role) => (
+                  {roleList.map((role) => (
                     <SelectItem key={role.id} value={role.id}>
                       {role.name}
                     </SelectItem>
@@ -214,14 +276,99 @@ export function SettingsUsers() {
                 </SelectContent>
               </Select>
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {apiError && <p className="text-sm text-destructive">{apiError}</p>}
           </form>
           <DialogFooter>
-            <Button variant="outline" type="button" onClick={() => setOpen(false)}>
+            <Button variant="outline" type="button" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" form="new-user-form" disabled={submitting}>
+            <Button type="submit" form="create-user-form" disabled={submitting}>
               {submitting ? 'Creating…' : 'Create user'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit dialog */}
+      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit user</DialogTitle>
+          </DialogHeader>
+          <form id="edit-user-form" onSubmit={handleEdit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="e-email">Email</Label>
+              <Input
+                id="e-email"
+                type="email"
+                value={editForm.email}
+                onChange={(e) => setEditForm((p) => ({ ...p, email: e.target.value }))}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="e-fname">First name</Label>
+              <Input
+                id="e-fname"
+                value={editForm.firstName}
+                onChange={(e) => setEditForm((p) => ({ ...p, firstName: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="e-lname">Last name</Label>
+              <Input
+                id="e-lname"
+                value={editForm.lastName}
+                onChange={(e) => setEditForm((p) => ({ ...p, lastName: e.target.value }))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="e-role">Role</Label>
+              <Select
+                value={editForm.roleId}
+                onValueChange={(v) => setEditForm((p) => ({ ...p, roleId: v }))}
+              >
+                <SelectTrigger id="e-role">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roleList.map((role) => (
+                    <SelectItem key={role.id} value={role.id}>
+                      {role.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {apiError && <p className="text-sm text-destructive">{apiError}</p>}
+          </form>
+          <DialogFooter>
+            <Button variant="outline" type="button" onClick={() => setEditUser(null)}>
+              Cancel
+            </Button>
+            <Button type="submit" form="edit-user-form" disabled={submitting}>
+              {submitting ? 'Saving…' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteUser} onOpenChange={(o) => { if (!o) setDeleteUser(null) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete user</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <span className="font-medium text-foreground">{deleteUser?.email}</span>? This action cannot be undone.
+          </p>
+          {apiError && <p className="text-sm text-destructive">{apiError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteUser(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={submitting}>
+              {submitting ? 'Deleting…' : 'Delete'}
             </Button>
           </DialogFooter>
         </DialogContent>
