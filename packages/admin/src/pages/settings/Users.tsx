@@ -48,8 +48,8 @@ type EditForm = { email: string; roleId: string; firstName: string; lastName: st
 
 const ROLE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   'super admin': 'default',
-  'admin': 'secondary',
-  'user': 'outline',
+  admin: 'secondary',
+  user: 'outline',
 }
 
 function RoleBadge({ roleId, roles }: { roleId: string; roles: Role[] }) {
@@ -101,7 +101,12 @@ export function SettingsUsers() {
   const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_CREATE)
 
   const [editUser, setEditUser] = useState<User | null>(null)
-  const [editForm, setEditForm] = useState<EditForm>({ email: '', roleId: '', firstName: '', lastName: '' })
+  const [editForm, setEditForm] = useState<EditForm>({
+    email: '',
+    roleId: '',
+    firstName: '',
+    lastName: '',
+  })
 
   const [deleteUser, setDeleteUser] = useState<User | null>(null)
 
@@ -115,7 +120,7 @@ export function SettingsUsers() {
         cell: ({ row }) => {
           const { first_name, last_name } = row.original
           if (!first_name && !last_name) return <span className="text-muted-foreground">—</span>
-          return [first_name, last_name].filter(Boolean).join(' ')
+          return <span className="font-bold">{[first_name, last_name].filter(Boolean).join(' ')}</span>
         },
       },
       {
@@ -160,7 +165,9 @@ export function SettingsUsers() {
       setCreateOpen(false)
       setCreateForm(EMPTY_CREATE)
       refetch()
-    } catch { /* error shown via apiError */ }
+    } catch {
+      /* error shown via apiError */
+    }
   }
 
   async function handleEdit(e: React.SyntheticEvent) {
@@ -176,7 +183,9 @@ export function SettingsUsers() {
       }
       setEditUser(null)
       refetch()
-    } catch { /* error shown via apiError */ }
+    } catch {
+      /* error shown via apiError */
+    }
   }
 
   async function handleDelete() {
@@ -184,7 +193,9 @@ export function SettingsUsers() {
       await request(`/cms/admin/users/${deleteUser!.id}`, 'DELETE')
       setDeleteUser(null)
       refetch()
-    } catch { /* error shown via apiError */ }
+    } catch {
+      /* error shown via apiError */
+    }
   }
 
   return (
@@ -224,7 +235,10 @@ export function SettingsUsers() {
               </TableRow>
             ) : table.getRowModel().rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center text-muted-foreground"
+                >
                   No users found.
                 </TableCell>
               </TableRow>
@@ -304,7 +318,12 @@ export function SettingsUsers() {
       </Dialog>
 
       {/* Edit dialog */}
-      <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null) }}>
+      <Dialog
+        open={!!editUser}
+        onOpenChange={(o) => {
+          if (!o) setEditUser(null)
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit user</DialogTitle>
@@ -368,13 +387,20 @@ export function SettingsUsers() {
       </Dialog>
 
       {/* Delete confirmation dialog */}
-      <Dialog open={!!deleteUser} onOpenChange={(o) => { if (!o) setDeleteUser(null) }}>
+      <Dialog
+        open={!!deleteUser}
+        onOpenChange={(o) => {
+          if (!o) setDeleteUser(null)
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Delete user</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete <span className="font-medium text-foreground">{deleteUser?.email}</span>? This action cannot be undone.
+            Are you sure you want to delete{' '}
+            <span className="font-medium text-foreground">{deleteUser?.email}</span>? This action
+            cannot be undone.
           </p>
           {apiError && <p className="text-sm text-destructive">{apiError}</p>}
           <DialogFooter>
