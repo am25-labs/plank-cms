@@ -1,8 +1,11 @@
-import { UsersRoundIcon, ShieldIcon, KeyRoundIcon } from 'lucide-react'
+import { Settings2Icon, UsersRoundIcon, ShieldIcon, KeyRoundIcon } from 'lucide-react'
 import { useAuth } from '@/context/auth.tsx'
 import { SidebarNav } from './SidebarNav.tsx'
 
-const BASE_ITEMS = [{ label: 'Users', to: '/settings/users', icon: UsersRoundIcon }]
+const BASE_ITEMS = [
+  { label: 'Overview', to: '/settings/overview', icon: Settings2Icon },
+  { label: 'Users', to: '/settings/users', icon: UsersRoundIcon },
+]
 const SUPER_ADMIN_ITEMS = [
   { label: 'Roles', to: '/settings/roles', icon: ShieldIcon },
   { label: 'API Tokens', to: '/settings/api-tokens', icon: KeyRoundIcon },

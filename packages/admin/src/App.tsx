@@ -8,6 +8,7 @@ import { ContentTypeBuilder } from './pages/ContentTypeBuilder.tsx'
 import { ContentManager } from './pages/ContentManager.tsx'
 import { MediaLibrary } from './pages/MediaLibrary.tsx'
 import { Settings } from './pages/Settings.tsx'
+import { SettingsOverview } from './pages/settings/Overview.tsx'
 import { SettingsUsers } from './pages/settings/Users.tsx'
 import { SettingsRoles } from './pages/settings/Roles.tsx'
 import { SettingsApiTokens } from './pages/settings/ApiTokens.tsx'
@@ -39,7 +40,8 @@ export default function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="users" replace />} />
+              <Route index element={<Navigate to="overview" replace />} />
+              <Route path="overview" element={<SettingsOverview />} />
               <Route path="users" element={<SettingsUsers />} />
               <Route
                 path="roles"
