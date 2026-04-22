@@ -114,17 +114,17 @@ function LayoutShell() {
           </DropdownMenu>
         </aside>
 
-        {secondaryPanel && (
-          <aside className="flex h-full w-56 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
-            {secondaryPanel}
-          </aside>
-        )}
-
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-7xl w-full mx-auto px-4 py-3">
             <Outlet />
           </div>
         </main>
+
+        {secondaryPanel && (
+          <aside className="flex h-full w-64 shrink-0 flex-col border-l border-sidebar-border bg-background">
+            {secondaryPanel}
+          </aside>
+        )}
       </div>
     </TooltipProvider>
   )
