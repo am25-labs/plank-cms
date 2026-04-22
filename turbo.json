@@ -9,6 +9,11 @@
       "cache": false,
       "persistent": true
     },
+    "@plank/core#dev": {
+      "dependsOn": ["@plank/db#build", "@plank/schema#build"],
+      "cache": false,
+      "persistent": true
+    },
     "lint": {
       "outputs": []
     }
