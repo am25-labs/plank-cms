@@ -64,7 +64,7 @@ export function AccountCard() {
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-semibold text-xl">
+              <p className="font-bold text-xl">
                 {user?.firstName || user?.lastName
                   ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
                   : user?.email}
