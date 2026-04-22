@@ -5,6 +5,8 @@ import { Layout } from './components/Layout.tsx'
 import { Login } from './pages/Login.tsx'
 import { Dashboard } from './pages/Dashboard.tsx'
 import { ContentTypeBuilder } from './pages/ContentTypeBuilder.tsx'
+import { ContentTypesIndex } from './pages/content-types/Index.tsx'
+import { ContentTypeForm } from './pages/content-types/Form.tsx'
 import { ContentManager } from './pages/ContentManager.tsx'
 import { MediaLibrary } from './pages/MediaLibrary.tsx'
 import { Settings } from './pages/Settings.tsx'
@@ -37,7 +39,11 @@ export default function App() {
                   <ContentTypeBuilder />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<ContentTypesIndex />} />
+              <Route path="new" element={<ContentTypeForm />} />
+              <Route path=":slug" element={<ContentTypeForm />} />
+            </Route>
             <Route
               path="settings"
               element={
