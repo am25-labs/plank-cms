@@ -28,10 +28,16 @@ export default function App() {
             }
           >
             <Route index element={<Dashboard />} />
-            <Route path="profile" element={<Profile />} />
-            <Route path="content-types" element={<ContentTypeBuilder />} />
             <Route path="content" element={<ContentManager />} />
             <Route path="media" element={<MediaLibrary />} />
+            <Route
+              path="content-types"
+              element={
+                <ProtectedRoute roles={['super admin', 'admin']}>
+                  <ContentTypeBuilder />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="settings"
               element={
@@ -60,6 +66,7 @@ export default function App() {
                 }
               />
             </Route>
+            <Route path="profile" element={<Profile />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

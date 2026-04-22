@@ -29,11 +29,13 @@ import {
 
 const BASE_ITEMS = [
   { to: '/', icon: LayoutDashboardIcon, label: 'Dashboard' },
-  { to: '/content-types', icon: LayersIcon, label: 'Content Types' },
   { to: '/content', icon: FileTextIcon, label: 'Content' },
   { to: '/media', icon: ImageIcon, label: 'Media' },
 ]
-const ADMIN_ITEMS = [{ to: '/settings', icon: Settings2Icon, label: 'Settings' }]
+const ADMIN_ITEMS = [
+  { to: '/content-types', icon: LayersIcon, label: 'Content Types' },
+  { to: '/settings', icon: Settings2Icon, label: 'Settings' },
+]
 
 function initials(user: { email: string; firstName?: string | null; lastName?: string | null }) {
   if (user.firstName && user.lastName)
