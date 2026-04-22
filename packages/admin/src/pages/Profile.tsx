@@ -28,6 +28,7 @@ export function Profile() {
   const [lastName, setLastName] = useState(user?.lastName ?? '')
   const [profileSuccess, setProfileSuccess] = useState(false)
 
+  const [changingPassword, setChangingPassword] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -82,6 +83,7 @@ export function Profile() {
       setCurrentPassword('')
       setNewPassword('')
       setConfirm('')
+      setChangingPassword(false)
     } catch {
       /* error shown via pwError */
     }
@@ -160,57 +162,74 @@ export function Profile() {
         </Collapsible>
 
         {/* Change password */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="uppercase">Change password</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="current">Current password</Label>
-                <Input
-                  id="current"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="new">New password</Label>
-                <Input
-                  id="new"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  minLength={8}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="confirm">Confirm new password</Label>
-                <Input
-                  id="confirm"
-                  type="password"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  required
-                />
+        <Collapsible open={changingPassword} onOpenChange={setChangingPassword}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="uppercase">Security</CardTitle>
+              {changingPassword && (
+                <CardAction>
+                  <Button variant="ghost" size="icon" onClick={() => setChangingPassword(false)}>
+                    <XIcon className="size-4" />
+                  </Button>
+                </CardAction>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <Button variant="secondary" onClick={() => setChangingPassword(true)}>
+                  Change password
+                </Button>
+                <Button variant="secondary" disabled>
+                  Enable 2FA
+                </Button>
               </div>
 
-              {(confirmError ?? pwError) && (
-                <p className="text-destructive text-sm">{confirmError ?? pwError}</p>
-              )}
-              {pwSuccess && (
-                <p className="text-green-500 text-sm">Password updated successfully.</p>
-              )}
+              <CollapsibleContent>
+                <form onSubmit={handlePasswordSubmit} className="space-y-4 mt-6">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="current">Current password</Label>
+                    <Input
+                      id="current"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="new">New password</Label>
+                    <Input
+                      id="new"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="confirm">Confirm new password</Label>
+                    <Input
+                      id="confirm"
+                      type="password"
+                      value={confirm}
+                      onChange={(e) => setConfirm(e.target.value)}
+                      required
+                    />
+                  </div>
 
-              <Button type="submit" disabled={changingPw}>
-                {changingPw ? 'Saving…' : 'Update password'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                  {(confirmError ?? pwError) && (
+                    <p className="text-destructive text-sm">{confirmError ?? pwError}</p>
+                  )}
+
+                  <Button type="submit" disabled={changingPw}>
+                    {changingPw ? 'Saving…' : 'Update password'}
+                  </Button>
+                </form>
+              </CollapsibleContent>
+            </CardContent>
+          </Card>
+        </Collapsible>
       </div>
     </section>
   )
