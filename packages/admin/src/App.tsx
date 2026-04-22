@@ -34,8 +34,22 @@ export default function App() {
             <Route path="settings" element={<Settings />}>
               <Route index element={<Navigate to="users" replace />} />
               <Route path="users" element={<SettingsUsers />} />
-              <Route path="roles" element={<SettingsRoles />} />
-              <Route path="api-tokens" element={<SettingsApiTokens />} />
+              <Route
+                path="roles"
+                element={
+                  <ProtectedRoute roles={['super admin']}>
+                    <SettingsRoles />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="api-tokens"
+                element={
+                  <ProtectedRoute roles={['super admin']}>
+                    <SettingsApiTokens />
+                  </ProtectedRoute>
+                }
+              />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
