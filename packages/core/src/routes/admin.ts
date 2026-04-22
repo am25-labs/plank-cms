@@ -16,7 +16,7 @@ import {
   deleteEntry,
 } from '../controllers/entries.js'
 import { listUsers, createUser, updateUser, deleteUser, getMe, updateMe, changePassword } from '../controllers/users.js'
-import { listRoles } from '../controllers/roles.js'
+import { listRoles, updateRole, resetRoles } from '../controllers/roles.js'
 import { listApiTokens, createApiToken, deleteApiToken } from '../controllers/apiTokens.js'
 import { uploadMedia } from '../controllers/media.js'
 import { upload } from '../media/index.js'
@@ -46,6 +46,8 @@ router.patch('/users/me/password', changePassword)
 
 // Roles
 router.get('/roles', authorize('users:read'), listRoles)
+router.put('/roles/:id', authorize('users:write'), updateRole)
+router.post('/roles/reset', authorize('users:write'), resetRoles)
 
 // Users
 router.get('/users', authorize('users:read'), listUsers)

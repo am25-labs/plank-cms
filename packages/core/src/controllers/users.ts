@@ -125,10 +125,20 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
 }
 
 export async function deleteUser(req: Request, res: Response): Promise<void> {
-  const { rowCount } = await pool.query(
-    'DELETE FROM plank_users WHERE id = $1',
+  const { rows } = await pool.query<{ role_id: string }>(
+    'SELECT role_id FROM plank_users WHERE id = $1',
     [req.params.id],
   )
-  if (!rowCount) { res.status(404).json({ error: 'User not found' }); return }
+  if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
+
+  const { rows: roleRows } = await pool.query<{ name: string }>(
+    'SELECT name FROM plank_roles WHERE id = $1',
+    [rows[0].role_id],
+  )
+  if (roleRows[0]?.name === 'Super Admin') {
+    res.status(403).json({ error: 'Super Admin users cannot be deleted' }); return
+  }
+
+  await pool.query('DELETE FROM plank_users WHERE id = $1', [req.params.id])
   res.status(204).end()
 }

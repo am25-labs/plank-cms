@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import type { PoolClient } from 'pg'
 import pool from './pool.js'
 import { createId } from './id.js'
+import { DEFAULT_ROLE_PERMISSIONS } from './defaults.js'
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'migrations')
 
@@ -30,16 +31,10 @@ async function seedDefaultRoles(client: PoolClient): Promise<void> {
   )
   if (parseInt(rows[0].count) > 0) return
 
-  const roles = [
-    { name: 'Super Admin', permissions: ['*'] },
-    { name: 'Admin', permissions: ['content-types:read', 'content-types:write', 'entries:read', 'entries:write', 'media:read', 'media:write', 'users:read'] },
-    { name: 'User', permissions: ['entries:read', 'media:read'] },
-  ]
-
-  for (const role of roles) {
+  for (const [name, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
     await client.query(
       'INSERT INTO plank_roles (id, name, permissions) VALUES ($1, $2, $3)',
-      [createId(), role.name, JSON.stringify(role.permissions)],
+      [createId(), name, JSON.stringify(permissions)],
     )
   }
   console.log('[plank/db] Seeded default roles.')
