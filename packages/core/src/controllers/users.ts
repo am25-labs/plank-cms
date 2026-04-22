@@ -14,19 +14,43 @@ const ChangePasswordSchema = z.object({
   newPassword: z.string().min(8),
 })
 
-type UserRow = { id: string; email: string; role_id: string; created_at: Date }
+const UpdateMeSchema = z.object({
+  firstName: z.string().max(100).optional(),
+  lastName: z.string().max(100).optional(),
+})
+
+type UserRow = { id: string; email: string; role_id: string; first_name: string | null; last_name: string | null; created_at: Date }
 
 export async function listUsers(_req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query<UserRow>(
-    'SELECT id, email, role_id, created_at FROM plank_users ORDER BY created_at DESC',
+    'SELECT id, email, role_id, first_name, last_name, created_at FROM plank_users ORDER BY created_at DESC',
   )
   res.json(rows)
 }
 
 export async function getMe(req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query<UserRow>(
-    'SELECT id, email, role_id, created_at FROM plank_users WHERE id = $1',
+    'SELECT id, email, role_id, first_name, last_name, created_at FROM plank_users WHERE id = $1',
     [req.user!.id],
+  )
+  if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
+  res.json(rows[0])
+}
+
+export async function updateMe(req: Request, res: Response): Promise<void> {
+  const parsed = UpdateMeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
+    return
+  }
+
+  const { firstName, lastName } = parsed.data
+  const { rows } = await pool.query<UserRow>(
+    `UPDATE plank_users
+     SET first_name = COALESCE($1, first_name), last_name = COALESCE($2, last_name)
+     WHERE id = $3
+     RETURNING id, email, role_id, first_name, last_name, created_at`,
+    [firstName ?? null, lastName ?? null, req.user!.id],
   )
   if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
   res.json(rows[0])

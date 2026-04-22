@@ -34,8 +34,10 @@ const NAV_ITEMS = [
   { to: '/settings', icon: Settings2Icon, label: 'Settings' },
 ]
 
-function initials(email: string) {
-  return email.slice(0, 2).toUpperCase()
+function initials(user: { email: string; firstName?: string | null; lastName?: string | null }) {
+  if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+  if (user.firstName) return user.firstName.slice(0, 2).toUpperCase()
+  return user.email.slice(0, 2).toUpperCase()
 }
 
 export function Layout() {
@@ -78,7 +80,7 @@ export function Layout() {
               <Button variant="ghost" size="icon" className="rounded-full">
                 <Avatar className="size-8">
                   <AvatarFallback className="text-[11px]">
-                    {user ? initials(user.email) : '??'}
+                    {user ? initials(user) : '??'}
                   </AvatarFallback>
                 </Avatar>
               </Button>

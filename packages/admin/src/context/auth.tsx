@@ -4,6 +4,8 @@ interface User {
   id: string
   email: string
   role: string
+  firstName: string | null
+  lastName: string | null
 }
 
 interface AuthState {
@@ -15,10 +17,12 @@ interface AuthState {
 type AuthAction =
   | { type: 'LOGIN'; payload: { user: User; token: string } }
   | { type: 'LOGOUT' }
+  | { type: 'UPDATE_USER'; payload: Partial<User> }
 
 interface AuthContextValue extends AuthState {
   login: (user: User, token: string) => void
   logout: () => void
+  updateUser: (patch: Partial<User>) => void
 }
 
 const TOKEN_KEY = 'plank_token'
@@ -30,6 +34,8 @@ function reducer(state: AuthState, action: AuthAction): AuthState {
       return { user: action.payload.user, token: action.payload.token, status: 'authenticated' }
     case 'LOGOUT':
       return { user: null, token: null, status: 'unauthenticated' }
+    case 'UPDATE_USER':
+      return { ...state, user: state.user ? { ...state.user, ...action.payload } : null }
   }
 }
 
@@ -71,7 +77,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'LOGOUT' })
   }
 
-  return <AuthContext.Provider value={{ ...state, login, logout }}>{children}</AuthContext.Provider>
+  function updateUser(patch: Partial<User>) {
+    dispatch({ type: 'UPDATE_USER', payload: patch })
+    const raw = localStorage.getItem(USER_KEY)
+    if (raw) {
+      try {
+        const user = JSON.parse(raw) as User
+        localStorage.setItem(USER_KEY, JSON.stringify({ ...user, ...patch }))
+      } catch { /* ignore */ }
+    }
+  }
+
+  return <AuthContext.Provider value={{ ...state, login, logout, updateUser }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
