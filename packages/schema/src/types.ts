@@ -10,12 +10,15 @@ export type FieldType =
 
 export type NumberSubtype = 'integer' | 'float'
 
+export type FieldWidth = 'full' | 'half' | 'third'
+
 export interface FieldDefinition {
   name: string
   type: FieldType
   required?: boolean
   subtype?: NumberSubtype   // only for 'number'
   relatedTable?: string     // only for 'relation'
+  width?: FieldWidth        // layout width in the entry editor
 }
 
 export interface ContentType {
