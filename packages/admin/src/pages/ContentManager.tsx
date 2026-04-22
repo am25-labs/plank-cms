@@ -1,8 +1,11 @@
+import { useSecondaryPanel } from '@/hooks/useSecondaryPanel.ts'
+import { ContentSidebar } from '@/components/sidebars/ContentSidebar.tsx'
+
 export function ContentManager() {
+  useSecondaryPanel(<ContentSidebar />)
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Content Manager</h1>
-      <p style={{ color: '#6b7280' }}>Manage entries for your content types.</p>
+    <div className="mb-8">
+      <h1 className="text-3xl font-bold">Content Manager</h1>
     </div>
   )
 }

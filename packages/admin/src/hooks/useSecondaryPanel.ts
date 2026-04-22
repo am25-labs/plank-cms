@@ -1,0 +1,10 @@
+import { useEffect, type ReactNode } from 'react'
+import { useSecondaryPanelContext } from '@/context/secondaryPanel.tsx'
+
+export function useSecondaryPanel(content: ReactNode) {
+  const { setContent } = useSecondaryPanelContext()
+  useEffect(() => {
+    setContent(content)
+    return () => setContent(null)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+}

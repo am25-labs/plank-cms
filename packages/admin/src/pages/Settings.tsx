@@ -1,8 +1,12 @@
+import { useSecondaryPanel } from '@/hooks/useSecondaryPanel.ts'
+import { SettingsSidebar } from '@/components/sidebars/SettingsSidebar.tsx'
+
 export function Settings() {
+  useSecondaryPanel(<SettingsSidebar />)
+
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Settings</h1>
-      <p style={{ color: '#6b7280' }}>Manage users, roles, and API tokens.</p>
+    <div className="mb-8">
+      <h1 className="text-3xl font-bold">Settings</h1>
     </div>
   )
 }

@@ -9,6 +9,7 @@ import {
   UserRoundIcon,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth.tsx'
+import { SecondaryPanelProvider, useSecondaryPanelContext } from '@/context/secondaryPanel.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar.tsx'
 import {
@@ -35,15 +36,17 @@ const NAV_ITEMS = [
 ]
 
 function initials(user: { email: string; firstName?: string | null; lastName?: string | null }) {
-  if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+  if (user.firstName && user.lastName)
+    return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
   if (user.firstName) return user.firstName.slice(0, 2).toUpperCase()
   return user.email.slice(0, 2).toUpperCase()
 }
 
-export function Layout() {
+function LayoutShell() {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const { content: secondaryPanel } = useSecondaryPanelContext()
 
   function isActive(to: string) {
     return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
@@ -107,12 +110,26 @@ export function Layout() {
           </DropdownMenu>
         </aside>
 
+        {secondaryPanel && (
+          <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
+            {secondaryPanel}
+          </aside>
+        )}
+
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl w-full mx-auto p-4">
+          <div className="max-w-7xl w-full mx-auto px-4 py-3">
             <Outlet />
           </div>
         </main>
       </div>
     </TooltipProvider>
+  )
+}
+
+export function Layout() {
+  return (
+    <SecondaryPanelProvider>
+      <LayoutShell />
+    </SecondaryPanelProvider>
   )
 }

@@ -1,8 +1,11 @@
+import { useSecondaryPanel } from '@/hooks/useSecondaryPanel.ts'
+import { ContentTypesSidebar } from '@/components/sidebars/ContentTypesSidebar.tsx'
+
 export function ContentTypeBuilder() {
+  useSecondaryPanel(<ContentTypesSidebar />)
   return (
-    <div>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Content Type Builder</h1>
-      <p style={{ color: '#6b7280' }}>Define your content types and fields.</p>
+    <div className="mb-8">
+      <h1 className="text-3xl font-bold">Content Type Builder</h1>
     </div>
   )
 }
