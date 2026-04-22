@@ -7,12 +7,19 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "outputLogs": "errors-only"
     },
     "@plank/core#dev": {
       "dependsOn": ["@plank/db#build", "@plank/schema#build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "outputLogs": "full"
+    },
+    "@plank/admin#dev": {
+      "cache": false,
+      "persistent": true,
+      "outputLogs": "new-only"
     },
     "lint": {
       "outputs": []

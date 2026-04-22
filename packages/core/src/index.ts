@@ -6,9 +6,15 @@ const PORT = process.env.PLANK_PORT ?? 5500
 async function start(): Promise<void> {
   await migrate()
   app.listen(PORT, () => {
-    console.log(`[plank] Server running → http://localhost:${PORT}`)
-    console.log(`[plank] Admin panel  → http://localhost:${PORT}/admin`)
-    console.log(`[plank] REST API     → http://localhost:${PORT}/api`)
+    const isDev = process.env.NODE_ENV !== 'production'
+    const base = process.env.PLANK_PUBLIC_URL ?? `http://localhost:${PORT}`
+    console.log('  ▲ Plank CMS by AM25')
+    if (isDev) {
+      console.log(`  Admin  → http://localhost:3000`)
+    } else {
+      console.log(`  Admin  → ${base}/admin`)
+      console.log(`  API    → ${base}/api`)
+    }
   })
 }
 
