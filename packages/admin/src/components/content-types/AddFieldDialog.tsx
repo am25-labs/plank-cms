@@ -1,0 +1,248 @@
+import { useState } from 'react'
+import {
+  TypeIcon,
+  AlignLeftIcon,
+  FileTextIcon,
+  HashIcon,
+  ToggleLeftIcon,
+  CalendarIcon,
+  ImageIcon,
+  LinkIcon,
+  ArrowLeftIcon,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog.tsx'
+import { Input } from '@/components/ui/input.tsx'
+import { Label } from '@/components/ui/label.tsx'
+import { Button } from '@/components/ui/button.tsx'
+import { Checkbox } from '@/components/ui/checkbox.tsx'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.tsx'
+import type { FieldCardData } from './FieldCard.tsx'
+
+type FieldType = FieldCardData['type']
+
+type TypeOption = {
+  type: FieldType
+  subtype?: 'integer' | 'float'
+  icon: LucideIcon
+  label: string
+  description: string
+  color: string
+  bg: string
+}
+
+const TYPE_OPTIONS: TypeOption[] = [
+  { type: 'string',   icon: TypeIcon,       label: 'Short text',    description: 'Titles, names, labels',           color: 'text-blue-600',    bg: 'bg-blue-50'    },
+  { type: 'text',     icon: AlignLeftIcon,  label: 'Long text',     description: 'Plain text, paragraphs',          color: 'text-sky-600',     bg: 'bg-sky-50'     },
+  { type: 'richtext', icon: FileTextIcon,   label: 'Rich text',     description: 'Formatted HTML content',          color: 'text-violet-600',  bg: 'bg-violet-50'  },
+  { type: 'number',   subtype: 'integer',   icon: HashIcon,         label: 'Integer',         description: 'Whole numbers',                    color: 'text-orange-600',  bg: 'bg-orange-50'  },
+  { type: 'number',   subtype: 'float',     icon: HashIcon,         label: 'Decimal',         description: 'Numbers with decimals',            color: 'text-orange-600',  bg: 'bg-orange-50'  },
+  { type: 'boolean',  icon: ToggleLeftIcon, label: 'Boolean',       description: 'True or false',                   color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { type: 'datetime', icon: CalendarIcon,   label: 'Date & time',   description: 'Timestamps and dates',            color: 'text-amber-600',   bg: 'bg-amber-50'   },
+  { type: 'media',    icon: ImageIcon,      label: 'Media',         description: 'Images, videos or files',         color: 'text-rose-600',    bg: 'bg-rose-50'    },
+  { type: 'relation', icon: LinkIcon,       label: 'Relation',      description: 'Link to another content type',    color: 'text-indigo-600',  bg: 'bg-indigo-50'  },
+]
+
+type ConfigState = {
+  name: string
+  required: boolean
+  relatedTable: string
+}
+
+const EMPTY_CONFIG: ConfigState = { name: '', required: false, relatedTable: '' }
+
+type Props = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  existingNames: string[]
+  availableTables: string[]
+  initialField?: FieldCardData
+  onConfirm: (field: FieldCardData) => void
+}
+
+export function AddFieldDialog({ open, onOpenChange, existingNames, availableTables, initialField, onConfirm }: Props) {
+  const [selected, setSelected] = useState<TypeOption | null>(null)
+  const [config, setConfig] = useState<ConfigState>(EMPTY_CONFIG)
+  const [nameError, setNameError] = useState('')
+
+  const isEditing = Boolean(initialField)
+
+  // When the dialog opens for editing, pre-populate step 2 directly
+  function handleOpenChange(val: boolean) {
+    if (!val) {
+      setSelected(null)
+      setConfig(EMPTY_CONFIG)
+      setNameError('')
+    } else if (initialField) {
+      const match = TYPE_OPTIONS.find(
+        (o) => o.type === initialField.type && (o.subtype ?? undefined) === (initialField.subtype ?? undefined)
+      )
+      setSelected(match ?? null)
+      setConfig({
+        name: initialField.name,
+        required: initialField.required ?? false,
+        relatedTable: initialField.relatedTable ?? '',
+      })
+    }
+    onOpenChange(val)
+  }
+
+  function handleSelectType(option: TypeOption) {
+    setSelected(option)
+    setConfig(EMPTY_CONFIG)
+    setNameError('')
+  }
+
+  function handleBack() {
+    if (!isEditing) {
+      setSelected(null)
+      setConfig(EMPTY_CONFIG)
+      setNameError('')
+    }
+  }
+
+  function validate() {
+    const trimmed = config.name.trim()
+    if (!trimmed) { setNameError('Name is required'); return false }
+    if (!/^[a-z][a-z0-9_]*$/.test(trimmed)) { setNameError('Lowercase letters, digits and underscores only'); return false }
+    if (existingNames.includes(trimmed) && trimmed !== initialField?.name) {
+      setNameError('A field with this name already exists')
+      return false
+    }
+    return true
+  }
+
+  function handleConfirm() {
+    if (!selected || !validate()) return
+    onConfirm({
+      name: config.name.trim(),
+      type: selected.type,
+      subtype: selected.subtype,
+      required: config.required || undefined,
+      relatedTable: selected.type === 'relation' ? config.relatedTable : undefined,
+      width: initialField?.width ?? 'full',
+    })
+    handleOpenChange(false)
+  }
+
+  const showStep2 = Boolean(selected)
+  const title = isEditing ? 'Edit field' : showStep2 ? `${selected!.label} field` : 'Add a field'
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className={showStep2 ? 'max-w-md' : 'max-w-2xl'}>
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            {showStep2 && !isEditing && (
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              >
+                <ArrowLeftIcon className="size-4" />
+              </button>
+            )}
+            <DialogTitle>{title}</DialogTitle>
+          </div>
+        </DialogHeader>
+
+        {/* Step 1 — type picker */}
+        {!showStep2 && (
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {TYPE_OPTIONS.map((option) => {
+              const Icon = option.icon
+              const key = `${option.type}${option.subtype ?? ''}`
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSelectType(option)}
+                  className="flex flex-col items-start gap-2 rounded-lg border border-border p-3 text-left transition-colors hover:border-primary hover:bg-accent"
+                >
+                  <div className={`flex size-8 items-center justify-center rounded-md ${option.bg}`}>
+                    <Icon className={`size-4 ${option.color}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{option.label}</p>
+                    <p className="text-xs text-muted-foreground">{option.description}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Step 2 — configure */}
+        {showStep2 && (
+          <div className="flex flex-col gap-4 pt-1">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="field-name">Field name</Label>
+              <Input
+                id="field-name"
+                placeholder="e.g. article_title"
+                value={config.name}
+                autoFocus
+                onChange={(e) => {
+                  setConfig((prev) => ({ ...prev, name: e.target.value }))
+                  setNameError('')
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleConfirm() }}
+              />
+              {nameError && <p className="text-xs text-destructive">{nameError}</p>}
+              <p className="text-xs text-muted-foreground">Lowercase letters, digits and underscores. Must start with a letter.</p>
+            </div>
+
+            {selected?.type === 'relation' && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Related content type</Label>
+                {availableTables.length > 0 ? (
+                  <Select value={config.relatedTable} onValueChange={(v) => setConfig((prev) => ({ ...prev, relatedTable: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a content type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTables.map((t) => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="table_name"
+                    value={config.relatedTable}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, relatedTable: e.target.value }))}
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="field-required"
+                checked={config.required}
+                onCheckedChange={(val) => setConfig((prev) => ({ ...prev, required: Boolean(val) }))}
+              />
+              <Label htmlFor="field-required" className="cursor-pointer font-normal">Required field</Label>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-border pt-3">
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
+              <Button onClick={handleConfirm}>{isEditing ? 'Save changes' : 'Add field'}</Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}

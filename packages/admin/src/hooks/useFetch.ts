@@ -6,12 +6,17 @@ interface FetchState<T> {
   error: string | null
 }
 
-export function useFetch<T>(url: string, options?: RequestInit) {
-  const [state, setState] = useState<FetchState<T>>({ data: null, loading: true, error: null })
+export function useFetch<T>(url: string | null, options?: RequestInit) {
+  const [state, setState] = useState<FetchState<T>>({ data: null, loading: Boolean(url), error: null })
 
   const token = localStorage.getItem('plank_token')
 
   const run = useCallback(() => {
+    if (!url) {
+      setState({ data: null, loading: false, error: null })
+      return
+    }
+
     setState({ data: null, loading: true, error: null })
 
     const headers: HeadersInit = {

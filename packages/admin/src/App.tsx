@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/auth.tsx'
 import { ProtectedRoute } from './components/ProtectedRoute.tsx'
 import { Layout } from './components/Layout.tsx'
@@ -16,67 +16,70 @@ import { SettingsRoles } from './pages/settings/Roles.tsx'
 import { SettingsApiTokens } from './pages/settings/ApiTokens.tsx'
 import { Profile } from './pages/Profile.tsx'
 
+const router = createBrowserRouter([
+  { path: '/login', element: <Login /> },
+  {
+    element: (
+      <ProtectedRoute>
+        <Layout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: 'content', element: <ContentManager /> },
+      { path: 'media', element: <MediaLibrary /> },
+      {
+        path: 'content-types',
+        element: (
+          <ProtectedRoute roles={['super admin', 'admin']}>
+            <ContentTypeBuilder />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <ContentTypesIndex /> },
+          { path: 'new', element: <ContentTypeForm /> },
+          { path: ':slug', element: <ContentTypeForm /> },
+        ],
+      },
+      {
+        path: 'settings',
+        element: (
+          <ProtectedRoute roles={['super admin', 'admin']}>
+            <Settings />
+          </ProtectedRoute>
+        ),
+        children: [
+          { index: true, element: <Navigate to="overview" replace /> },
+          { path: 'overview', element: <SettingsOverview /> },
+          { path: 'users', element: <SettingsUsers /> },
+          {
+            path: 'roles',
+            element: (
+              <ProtectedRoute roles={['super admin']}>
+                <SettingsRoles />
+              </ProtectedRoute>
+            ),
+          },
+          {
+            path: 'api-tokens',
+            element: (
+              <ProtectedRoute roles={['super admin']}>
+                <SettingsApiTokens />
+              </ProtectedRoute>
+            ),
+          },
+        ],
+      },
+      { path: 'profile', element: <Profile /> },
+    ],
+  },
+  { path: '*', element: <Navigate to="/" replace /> },
+])
+
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            element={
-              <ProtectedRoute>
-                <Layout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="content" element={<ContentManager />} />
-            <Route path="media" element={<MediaLibrary />} />
-            <Route
-              path="content-types"
-              element={
-                <ProtectedRoute roles={['super admin', 'admin']}>
-                  <ContentTypeBuilder />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<ContentTypesIndex />} />
-              <Route path="new" element={<ContentTypeForm />} />
-              <Route path=":slug" element={<ContentTypeForm />} />
-            </Route>
-            <Route
-              path="settings"
-              element={
-                <ProtectedRoute roles={['super admin', 'admin']}>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<Navigate to="overview" replace />} />
-              <Route path="overview" element={<SettingsOverview />} />
-              <Route path="users" element={<SettingsUsers />} />
-              <Route
-                path="roles"
-                element={
-                  <ProtectedRoute roles={['super admin']}>
-                    <SettingsRoles />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="api-tokens"
-                element={
-                  <ProtectedRoute roles={['super admin']}>
-                    <SettingsApiTokens />
-                  </ProtectedRoute>
-                }
-              />
-            </Route>
-            <Route path="profile" element={<Profile />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </AuthProvider>
   )
 }

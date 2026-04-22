@@ -1,0 +1,32 @@
+{
+  "id": "a54ab1da-8358-4086-998b-f96147bf0120",
+  "name": "Articles",
+  "slug": "articles",
+  "tableName": "articles",
+  "fields": [
+    {
+      "name": "title",
+      "type": "string",
+      "width": "full",
+      "required": true
+    },
+    {
+      "name": "slug",
+      "type": "string",
+      "width": "half",
+      "required": true
+    },
+    {
+      "name": "published_at",
+      "type": "datetime",
+      "width": "half"
+    },
+    {
+      "name": "content",
+      "type": "richtext",
+      "width": "full"
+    }
+  ],
+  "createdAt": "2026-04-23T04:15:56.188Z",
+  "updatedAt": "2026-04-23T04:21:08.707Z"
+}

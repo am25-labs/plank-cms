@@ -20,6 +20,7 @@ const FieldSchema = z.object({
   required: z.boolean().optional(),
   subtype: z.enum(['integer', 'float']).optional(),
   relatedTable: z.string().optional(),
+  width: z.enum(['full', 'half', 'third']).optional(),
 })
 
 const ContentTypeSchema = z.object({

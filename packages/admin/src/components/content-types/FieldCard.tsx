@@ -7,8 +7,12 @@ import {
   CalendarIcon,
   ImageIcon,
   LinkIcon,
+  GripVerticalIcon,
+  PencilIcon,
+  Trash2Icon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import type { DraggableSyntheticListeners } from '@dnd-kit/core'
 
 type FieldType = 'string' | 'text' | 'richtext' | 'number' | 'boolean' | 'datetime' | 'media' | 'relation'
 type NumberSubtype = 'integer' | 'float'
@@ -62,7 +66,6 @@ export const FIELD_WIDTH_SPAN: Record<FieldWidth, string> = {
   third: 'col-span-2',
 }
 
-// Small layout icons that represent each width visually
 function WidthIcon({ width }: { width: FieldWidth }) {
   const bar = 'rounded-sm bg-current'
   if (width === 'full')
@@ -96,14 +99,30 @@ const WIDTH_OPTIONS: { value: FieldWidth; label: string }[] = [
 type FieldCardProps = {
   field: FieldCardData
   onWidthChange?: (width: FieldWidth) => void
+  onEdit?: () => void
+  onDelete?: () => void
+  dragListeners?: DraggableSyntheticListeners
+  dragAttributes?: React.HTMLAttributes<HTMLElement>
 }
 
-export function FieldCard({ field, onWidthChange }: FieldCardProps) {
+export function FieldCard({ field, onWidthChange, onEdit, onDelete, dragListeners, dragAttributes }: FieldCardProps) {
   const { icon: Icon, label, color, bg } = getFieldMeta(field.type, field.subtype)
   const currentWidth = field.width ?? 'full'
+  const isDraggable = Boolean(dragListeners)
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-xs">
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-3 shadow-xs">
+      {isDraggable && (
+        <button
+          type="button"
+          className="flex shrink-0 cursor-grab items-center text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+          {...dragListeners}
+          {...dragAttributes}
+        >
+          <GripVerticalIcon className="size-4" />
+        </button>
+      )}
+
       <div className={`flex size-8 shrink-0 items-center justify-center rounded-md ${bg}`}>
         <Icon className={`size-4 ${color}`} />
       </div>
@@ -134,6 +153,31 @@ export function FieldCard({ field, onWidthChange }: FieldCardProps) {
               <WidthIcon width={value} />
             </button>
           ))}
+        </div>
+      )}
+
+      {(onEdit || onDelete) && (
+        <div className="flex shrink-0 items-center gap-0.5">
+          {onEdit && (
+            <button
+              type="button"
+              title="Edit field"
+              onClick={onEdit}
+              className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <PencilIcon className="size-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              title="Delete field"
+              onClick={onDelete}
+              className="flex size-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2Icon className="size-3.5" />
+            </button>
+          )}
         </div>
       )}
     </div>
