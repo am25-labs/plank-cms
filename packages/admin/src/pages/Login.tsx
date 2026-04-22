@@ -1,7 +1,10 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/auth.tsx'
-import { useApi } from '../hooks/useApi.ts'
+import { useAuth } from '@/context/auth.tsx'
+import { useApi } from '@/hooks/useApi.ts'
+import { Button } from '@/components/ui/button.tsx'
+import { Input } from '@/components/ui/input.tsx'
+import { Label } from '@/components/ui/label.tsx'
 
 interface AuthResponse {
   token: string
@@ -49,55 +52,80 @@ export function Login() {
   const displayError = validationError ?? error
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#f9fafb' }}>
-      <div style={{ width: 360, background: '#fff', borderRadius: 12, padding: 32, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>Plank CMS</h1>
-        {needsSetup && (
-          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 24 }}>Create your admin account to get started.</p>
-        )}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: needsSetup ? 0 : 24 }}>
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14, boxSizing: 'border-box' }}
-            />
+    <div className="grid min-h-svh lg:grid-cols-2">
+      {/* Left panel — form */}
+      <div className="flex flex-col gap-4 p-6 md:p-10">
+        <div className="flex items-center gap-2">
+          <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+            <span className="text-xs font-bold">P</span>
           </div>
-          <div>
-            <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14, boxSizing: 'border-box' }}
-            />
-          </div>
-          {needsSetup && (
-            <div>
-              <label style={{ fontSize: 13, fontWeight: 500, display: 'block', marginBottom: 4 }}>Confirm password</label>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-                style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', fontSize: 14, boxSizing: 'border-box' }}
-              />
+          <span className="font-semibold">Plank CMS</span>
+        </div>
+
+        <div className="flex flex-1 items-center justify-center">
+          <div className="w-full max-w-xs">
+            <div className="mb-6 text-center">
+              <h1 className="text-2xl font-bold">
+                {needsSetup ? 'Create your account' : 'Welcome back'}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {needsSetup
+                  ? 'Set up your admin account to get started'
+                  : 'Enter your credentials to access the panel'}
+              </p>
             </div>
-          )}
-          {displayError && <p style={{ fontSize: 13, color: '#ef4444', margin: 0 }}>{displayError}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ padding: '10px', borderRadius: 6, background: '#111', color: '#fff', border: 'none', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
-          >
-            {loading ? '...' : needsSetup ? 'Create account' : 'Login'}
-          </button>
-        </form>
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              {needsSetup && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="confirm">Confirm password</Label>
+                  <Input
+                    id="confirm"
+                    type="password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+
+              {displayError && (
+                <p className="text-sm text-destructive">{displayError}</p>
+              )}
+
+              <Button type="submit" disabled={loading} className="w-full">
+                {loading ? '...' : needsSetup ? 'Create account' : 'Login'}
+              </Button>
+            </form>
+          </div>
+        </div>
       </div>
+
+      {/* Right panel — decorative */}
+      <div className="hidden bg-muted lg:block" />
     </div>
   )
 }

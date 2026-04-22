@@ -1,50 +1,113 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { useAuth } from '../context/auth.tsx'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import {
+  LayoutDashboardIcon,
+  LayersIcon,
+  FileTextIcon,
+  ImageIcon,
+  Settings2Icon,
+  LogOutIcon,
+  UserRoundIcon,
+} from 'lucide-react'
+import { useAuth } from '@/context/auth.tsx'
+import { Button } from '@/components/ui/button.tsx'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar.tsx'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu.tsx'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip.tsx'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/content-types', label: 'Content Types' },
-  { to: '/content', label: 'Content' },
-  { to: '/media', label: 'Media' },
-  { to: '/settings', label: 'Settings' },
+  { to: '/', icon: LayoutDashboardIcon, label: 'Dashboard' },
+  { to: '/content-types', icon: LayersIcon, label: 'Content Types' },
+  { to: '/content', icon: FileTextIcon, label: 'Content' },
+  { to: '/media', icon: ImageIcon, label: 'Media' },
+  { to: '/settings', icon: Settings2Icon, label: 'Settings' },
 ]
+
+function initials(email: string) {
+  return email.slice(0, 2).toUpperCase()
+}
 
 export function Layout() {
   const { user, logout } = useAuth()
+  const { pathname } = useLocation()
+
+  function isActive(to: string) {
+    return to === '/' ? pathname === '/' : pathname.startsWith(to)
+  }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside style={{ width: 220, borderRight: '1px solid #e5e7eb', padding: '24px 16px' }}>
-        <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 32 }}>Plank CMS</p>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {NAV_ITEMS.map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              style={({ isActive }) => ({
-                padding: '8px 12px',
-                borderRadius: 6,
-                textDecoration: 'none',
-                color: isActive ? '#111' : '#6b7280',
-                background: isActive ? '#f3f4f6' : 'transparent',
-                fontWeight: isActive ? 600 : 400,
-              })}
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-        <div style={{ marginTop: 'auto', paddingTop: 32 }}>
-          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 8 }}>{user?.email}</p>
-          <button onClick={logout} style={{ fontSize: 13, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            Logout
-          </button>
-        </div>
-      </aside>
-      <main style={{ flex: 1, padding: 32 }}>
-        <Outlet />
-      </main>
-    </div>
+    <TooltipProvider delayDuration={300}>
+      <div className="flex min-h-svh bg-background">
+        <aside className="flex w-14 flex-col items-center gap-4 border-r border-sidebar-border bg-sidebar py-4">
+          {/* Logo placeholder */}
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <span className="text-xs font-bold text-muted-foreground">P</span>
+          </div>
+
+          {/* Nav */}
+          <nav className="flex flex-1 flex-col items-center gap-1 pt-2">
+            {NAV_ITEMS.map(({ to, icon: IconComponent, label }) => (
+              <Tooltip key={to}>
+                <TooltipTrigger asChild>
+                  <Button asChild size="icon" variant={isActive(to) ? 'secondary' : 'ghost'}>
+                    <NavLink to={to} end={to === '/'}>
+                      <IconComponent className="size-4" />
+                    </NavLink>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right">{label}</TooltipContent>
+              </Tooltip>
+            ))}
+          </nav>
+
+          {/* User avatar */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Avatar className="size-8">
+                  <AvatarFallback className="text-[11px]">
+                    {user ? initials(user.email) : '??'}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="right" align="end" className="w-52">
+              <DropdownMenuLabel className="font-normal">
+                <p className="truncate text-sm font-medium">{user?.email}</p>
+                <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <UserRoundIcon />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={logout}
+                className="text-destructive focus:text-destructive"
+              >
+                <LogOutIcon />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </aside>
+
+        <main className="flex-1">
+          <Outlet />
+        </main>
+      </div>
+    </TooltipProvider>
   )
 }
