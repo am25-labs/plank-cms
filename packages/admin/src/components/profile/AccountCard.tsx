@@ -40,7 +40,9 @@ export function AccountCard() {
       const updated = await request('/cms/admin/users/me', 'PATCH', { firstName, lastName })
       updateUser({ firstName: updated.first_name, lastName: updated.last_name })
       setEditing(false)
-    } catch { /* error shown via saveError */ }
+    } catch {
+      /* error shown via saveError */
+    }
   }
 
   return (
@@ -73,7 +75,7 @@ export function AccountCard() {
           </div>
 
           <CollapsibleContent>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-6">
+            <form onSubmit={handleSubmit} className="space-y-4 mt-8">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="firstName">First name</Label>

@@ -53,17 +53,19 @@ export function SecurityCard() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
-            <Button variant="secondary" onClick={() => setOpen(true)}>
-              Change password
-            </Button>
-            <Button variant="secondary" disabled>
-              Enable 2FA
-            </Button>
-          </div>
+          {!open && (
+            <div className="flex gap-4">
+              <Button variant="secondary" onClick={() => setOpen(true)}>
+                Change password
+              </Button>
+              <Button variant="secondary" disabled>
+                Enable 2FA
+              </Button>
+            </div>
+          )}
 
           <CollapsibleContent>
-            <form onSubmit={handleSubmit} className="space-y-4 mt-8">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="current">Current password</Label>
                 <Input
