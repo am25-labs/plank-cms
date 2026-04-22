@@ -35,6 +35,7 @@ type ContentTypeRow = {
   slug: string
   table_name: string
   fields: ContentType['fields']
+  is_default: boolean
   created_at: Date
   updated_at: Date
 }
@@ -46,6 +47,7 @@ function rowToContentType(row: ContentTypeRow): ContentType {
     slug: row.slug,
     tableName: row.table_name,
     fields: row.fields,
+    isDefault: row.is_default,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -94,6 +96,28 @@ export async function updateContentType(
   const updated = rowToContentType(rows[0])
   await writeToDisk(updated)
   return updated
+}
+
+export async function setDefaultContentType(slug: string): Promise<ContentType> {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('UPDATE plank_content_types SET is_default = false')
+    const { rows } = await client.query<ContentTypeRow>(
+      'UPDATE plank_content_types SET is_default = true WHERE slug = $1 RETURNING *',
+      [slug],
+    )
+    if (!rows[0]) throw new Error(`Content type "${slug}" not found`)
+    await client.query('COMMIT')
+    const updated = rowToContentType(rows[0])
+    await writeToDisk(updated)
+    return updated
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 export async function deleteContentType(slug: string): Promise<void> {

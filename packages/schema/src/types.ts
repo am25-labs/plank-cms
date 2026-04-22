@@ -29,6 +29,7 @@ export interface ContentType {
   slug: string
   tableName: string
   fields: FieldDefinition[]
+  isDefault?: boolean
   createdAt?: Date
   updatedAt?: Date
 }

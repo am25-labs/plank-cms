@@ -9,5 +9,6 @@ export {
   saveContentType,
   updateContentType,
   deleteContentType,
+  setDefaultContentType,
   readContentTypeFromDisk,
 } from './store.js'

@@ -7,6 +7,7 @@ import {
   createContentType,
   updateContentType,
   deleteContentType,
+  setDefaultContentType,
 } from '../controllers/contentTypes.js'
 import {
   listEntries,
@@ -30,6 +31,7 @@ router.get('/content-types', authorize('content-types:read'), listContentTypes)
 router.post('/content-types', authorize('content-types:write'), createContentType)
 router.get('/content-types/:slug', authorize('content-types:read'), getContentType)
 router.put('/content-types/:slug', authorize('content-types:write'), updateContentType)
+router.put('/content-types/:slug/default', authorize('content-types:write'), setDefaultContentType)
 router.delete('/content-types/:slug', authorize('content-types:write'), deleteContentType)
 
 // Entries

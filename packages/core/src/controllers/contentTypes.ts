@@ -8,6 +8,7 @@ import {
   saveContentType,
   updateContentType as updateInStore,
   deleteContentType as deleteFromStore,
+  setDefaultContentType as setDefaultInStore,
   createTable,
   syncTable,
   assertSafeIdentifier,
@@ -73,6 +74,11 @@ export const updateContentType: SlugParam = async (req, res) => {
   const next = await updateInStore(req.params.slug, parsed.data)
   await syncTable(next, prev)
   res.json(next)
+}
+
+export const setDefaultContentType: SlugParam = async (req, res) => {
+  const ct = await setDefaultInStore(req.params.slug)
+  res.json(ct)
 }
 
 export const deleteContentType: SlugParam = async (req, res) => {
