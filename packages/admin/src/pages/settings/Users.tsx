@@ -157,7 +157,15 @@ export function SettingsUsers() {
     [roleList],
   )
 
-  const table = useReactTable({ data: users ?? [], columns, getCoreRowModel: getCoreRowModel() })
+  const sortedUsers = useMemo(() => {
+    return [...(users ?? [])].sort((a, b) => {
+      const nameA = [a.first_name, a.last_name].filter(Boolean).join(' ') || a.email
+      const nameB = [b.first_name, b.last_name].filter(Boolean).join(' ') || b.email
+      return nameA.localeCompare(nameB)
+    })
+  }, [users])
+
+  const table = useReactTable({ data: sortedUsers, columns, getCoreRowModel: getCoreRowModel() })
 
   async function handleCreate(e: React.SyntheticEvent) {
     e.preventDefault()
