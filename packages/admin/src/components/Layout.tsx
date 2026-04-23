@@ -62,10 +62,7 @@ function LayoutShell() {
     <TooltipProvider delayDuration={300}>
       <div className="flex h-svh overflow-hidden bg-background">
         <aside className="flex h-full w-14 shrink-0 flex-col items-center gap-4 border-r border-sidebar-border bg-sidebar py-4">
-          {/* Logo placeholder */}
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-            <span className="text-xs font-bold text-muted-foreground">P</span>
-          </div>
+          <img src="/plank-logo-w.svg" alt="Plank CMS" className="px-3 pb-4" />
 
           {/* Nav */}
           <nav className="flex flex-1 flex-col items-center gap-1 pt-2">
