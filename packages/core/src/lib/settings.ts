@@ -49,7 +49,7 @@ export async function setSettings(namespace: string, values: Record<string, stri
   }
 
   await pool.query(
-    `INSERT INTO plank_settings (namespace, key, value, updated_at)
+    `INSERT INTO plank_settings (namespace, key, value)
      VALUES ${placeholders}
      ON CONFLICT (namespace, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
     params,
