@@ -146,8 +146,11 @@ function LayoutShell() {
           </DropdownMenu>
         </aside>
 
+        {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="max-w-7xl w-full mx-auto px-4 mb-16">
+          <div
+            className={`w-full mx-auto px-4 mb-16 ${secondaryPanel ? 'max-w-7xl' : 'max-w-9xl'}`}
+          >
             <Outlet />
           </div>
         </main>
