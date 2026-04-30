@@ -10,21 +10,21 @@
       "persistent": true,
       "outputLogs": "errors-only"
     },
-    "@plank/admin#build": {
+    "@plank-cms/admin#build": {
       "dependsOn": ["^build"],
       "outputs": ["../core/public/admin/**"]
     },
-    "@am25/plank-cms#build": {
-      "dependsOn": ["^build", "@plank/admin#build"],
+    "@plank-cms/plank#build": {
+      "dependsOn": ["^build", "@plank-cms/admin#build"],
       "outputs": ["dist/**"]
     },
-    "@plank/core#dev": {
-      "dependsOn": ["@plank/db#build", "@plank/schema#build"],
+    "@plank-cms/core#dev": {
+      "dependsOn": ["@plank-cms/db#build", "@plank-cms/schema#build"],
       "cache": false,
       "persistent": true,
       "outputLogs": "full"
     },
-    "@plank/admin#dev": {
+    "@plank-cms/admin#dev": {
       "cache": false,
       "persistent": true,
       "outputLogs": "new-only"
