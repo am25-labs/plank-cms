@@ -1,5 +1,5 @@
 {
-  "name": "@plank/admin",
+  "name": "@plank-cms/admin",
   "version": "0.11.2",
   "type": "module",
   "scripts": {

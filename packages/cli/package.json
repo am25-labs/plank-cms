@@ -1,5 +1,5 @@
 {
-  "name": "@am25/plank-cms",
+  "name": "@plank-cms/plank-cms",
   "version": "0.11.2",
   "description": "Self-hosted headless CMS. Deploy in minutes on your own infrastructure.",
   "type": "module",
@@ -19,13 +19,13 @@
     "url": "https://alemartir.com"
   },
   "license": "MIT",
-  "homepage": "https://github.com/am25-labs/plank-cms#readme",
+  "homepage": "https://github.com/plank-cms/plank#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/am25-labs/plank-cms.git"
+    "url": "git+https://github.com/plank-cms/plank.git"
   },
   "bugs": {
-    "url": "https://github.com/am25-labs/plank-cms/issues"
+    "url": "https://github.com/plank-cms/plank/issues"
   },
   "keywords": [
     "cms",
@@ -58,9 +58,9 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
-    "@plank/core": "workspace:*",
-    "@plank/db": "workspace:*",
-    "@plank/schema": "workspace:*",
+    "@plank-cms/core": "workspace:*",
+    "@plank-cms/db": "workspace:*",
+    "@plank-cms/schema": "workspace:*",
     "@types/fs-extra": "^11.0.4",
     "tsup": "^8.5.0"
   }

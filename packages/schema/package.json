@@ -1,5 +1,5 @@
 {
-  "name": "@plank/schema",
+  "name": "@plank-cms/schema",
   "version": "0.11.2",
   "type": "module",
   "main": "dist/index.js",
@@ -10,6 +10,6 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@plank/db": "workspace:*"
+    "@plank-cms/db": "workspace:*"
   }
 }

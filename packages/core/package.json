@@ -1,5 +1,5 @@
 {
-  "name": "@plank/core",
+  "name": "@plank-cms/core",
   "version": "0.11.2",
   "type": "module",
   "main": "dist/index.js",
@@ -22,8 +22,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "3.995.0",
     "@aws-sdk/s3-request-presigner": "3.995.0",
-    "@plank/db": "workspace:*",
-    "@plank/schema": "workspace:*",
+    "@plank-cms/db": "workspace:*",
+    "@plank-cms/schema": "workspace:*",
     "bcryptjs": "3.0.3",
     "cors": "2.8.6",
     "express": "5.2.1",
