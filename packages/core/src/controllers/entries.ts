@@ -127,12 +127,13 @@ export const listEntries: SlugParam = async (req, res) => {
 
   const data = await Promise.all(
     filtered.map(async (row) => {
+      const mmIds = await loadManyToManyIds(row.id, ct.tableName, ct.fields)
       const resolved = resolveLocalizedRow(row, ct, locale, fallbacks)
       const key = resolved._author_avatar_url as string | null
       if (key && !key.startsWith('http')) {
         resolved._author_avatar_url = await provider.getUrl(key)
       }
-      return resolved
+      return { ...resolved, ...mmIds }
     }),
   )
 

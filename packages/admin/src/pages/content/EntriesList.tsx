@@ -77,10 +77,13 @@ type FieldType =
   | 'relation'
   | 'uid'
 
+type RelationType = 'many-to-one' | 'one-to-one' | 'one-to-many' | 'many-to-many'
+
 type FieldDef = {
   name: string
   type: FieldType
-  // relation metadata (optional)
+
+  relationType?: RelationType
   relatedSlug?: string
 }
 
@@ -117,6 +120,108 @@ const SYSTEM_SORT_OPTIONS = [
 
 function humanize(name: string) {
   return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+type RelationCTField = { name: string; type: string }
+type RelationContentType = { fields?: RelationCTField[] }
+
+function pickRelationDisplayField(fields: RelationCTField[]) {
+  return (
+    fields.find((f) => f.name === 'title')?.name ??
+    fields.find((f) => f.name === 'name')?.name ??
+    fields.find((f) => f.type === 'uid')?.name ??
+    fields.find((f) => f.type === 'string')?.name ??
+    null
+  )
+}
+
+function normalizeRelationIds(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item ?? '').trim()).filter(Boolean)
+  }
+
+  const id = String(value ?? '').trim()
+  return id ? [id] : []
+}
+
+function RelationValueCell({
+  relatedSlug,
+  value,
+  displayField,
+}: {
+  relatedSlug?: string
+  value: unknown
+  displayField?: string
+}) {
+  const [labels, setLabels] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const ids = normalizeRelationIds(value)
+
+  useEffect(() => {
+    const nextIds = normalizeRelationIds(value)
+
+    if (!relatedSlug || nextIds.length === 0) {
+      setLabels([])
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+
+    const token = localStorage.getItem('plank_token')
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+    const resolveDisplayField = displayField
+      ? Promise.resolve(displayField)
+      : fetch(`/cms/admin/content-types/${relatedSlug}`, { headers })
+          .then((r) => (r.ok ? (r.json() as Promise<RelationContentType>) : null))
+          .then((ct) => pickRelationDisplayField(ct?.fields ?? []))
+          .catch(() => null)
+
+    resolveDisplayField
+      .then((resolvedDisplayField) =>
+        Promise.all(
+          nextIds.map((id) =>
+            fetch(`/cms/admin/entries/${relatedSlug}/${id}`, { headers })
+              .then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : null))
+              .then((entry) => {
+                if (!entry) return id
+                return String(
+                  (resolvedDisplayField && entry[resolvedDisplayField]) ??
+                    entry.title ??
+                    entry.name ??
+                    id,
+                )
+              })
+              .catch(() => id),
+          ),
+        ),
+      )
+      .then((nextLabels) => {
+        if (!cancelled) setLabels(nextLabels.filter(Boolean))
+      })
+      .catch(() => {
+        if (!cancelled) setLabels(nextIds)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [relatedSlug, displayField, value])
+
+  if (ids.length === 0) {
+    return <span className="text-muted-foreground">—</span>
+  }
+
+  if (loading && labels.length === 0) {
+    return <span className="text-muted-foreground">…</span>
+  }
+
+  return <span className="font-medium truncate max-w-50 block">{labels.join(', ')}</span>
 }
 
 function defaultViewConfig(allFields: FieldDef[]): ViewConfig {
@@ -235,19 +340,13 @@ function FieldCell({
   }
 
   if (field.type === 'relation') {
-    const id = String(value)
-
-    const { data } = useFetch<any>(
-      field.relatedSlug && id ? `/cms/admin/entries/${field.relatedSlug}/${id}` : null,
+    return (
+      <RelationValueCell
+        relatedSlug={field.relatedSlug}
+        value={value}
+        displayField={displayField}
+      />
     )
-
-    if (!data) {
-      return <span className="text-muted-foreground">…</span>
-    }
-
-    const resolvedValue = (displayField && data?.[displayField]) || data?.title || data?.name || id
-
-    return <span className="font-medium truncate max-w-50 block">{String(resolvedValue)}</span>
   }
 
   if (field.type === 'text' || field.type === 'richtext') {
@@ -909,7 +1008,9 @@ export function EntriesList() {
                         const rawValue = entry[col.field.name]
                         let value: unknown = rawValue
 
-                        if (col.displayField) {
+                        if (col.field.type === 'relation') {
+                          value = rawValue
+                        } else if (col.displayField) {
                           if (rawValue && typeof rawValue === 'object') {
                             value = (rawValue as Record<string, any>)[col.displayField]
                           } else {
