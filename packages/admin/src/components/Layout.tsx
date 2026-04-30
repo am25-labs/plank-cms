@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useFetch } from '@/hooks/useFetch.ts'
 import {
   LayoutDashboardIcon,
   LayersIcon,
@@ -7,6 +8,7 @@ import {
   Settings2Icon,
   LogOutIcon,
   UserRoundIcon,
+  PlusIcon,
 } from 'lucide-react'
 import { useAuth } from '@/context/auth.tsx'
 import { SecondaryPanelProvider, useSecondaryPanelContext } from '@/context/secondaryPanel.tsx'
@@ -40,11 +42,20 @@ const NAV_ITEMS = [
   { to: '/settings', icon: Settings2Icon, label: 'Settings', permission: 'settings:overview:read' },
 ]
 
+type ContentType = {
+  slug: string
+  isDefault?: boolean
+  name?: string
+  kind?: string
+  fields?: any[]
+}
+
 function LayoutShell() {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { content: secondaryPanel } = useSecondaryPanelContext()
+  const { data: contentTypes } = useFetch<ContentType[]>('/cms/admin/content-types')
 
   function isActive(to: string) {
     return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
@@ -67,6 +78,23 @@ function LayoutShell() {
               className="px-3 pb-4"
             />
           </NavLink>
+
+          {/* New Entry */}
+          {(user?.permissions?.includes('*') || user?.permissions?.includes('entries:write')) && (
+            <div className="mt-5 px-3">
+              <Button
+                size="icon"
+                onClick={() => {
+                  if (!contentTypes || contentTypes.length === 0) return
+                  const target = contentTypes.find((ct: any) => ct.isDefault) ?? contentTypes[0]
+                  navigate(`/content/${target.slug}/new`)
+                }}
+                disabled={!contentTypes || contentTypes.length === 0}
+              >
+                <PlusIcon className="size-4" />
+              </Button>
+            </div>
+          )}
 
           {/* Nav */}
           <nav className="flex flex-1 flex-col items-center gap-1 pt-2">
