@@ -77,7 +77,12 @@ type FieldType =
   | 'relation'
   | 'uid'
 
-type FieldDef = { name: string; type: FieldType }
+type FieldDef = {
+  name: string
+  type: FieldType
+  // relation metadata (optional)
+  relatedSlug?: string
+}
 
 type ContentType = { name: string; slug: string; fields: FieldDef[] }
 
@@ -123,7 +128,10 @@ function defaultViewConfig(allFields: FieldDef[]): ViewConfig {
 
 function parseViewConfig(saved: Partial<ViewConfig> | null, allFields: FieldDef[]): ViewConfig {
   if (!saved) return defaultViewConfig(allFields)
-  const visible = (saved.visibleFields ?? []).filter((n) => allFields.some((f) => f.name === n))
+  const visible = (saved.visibleFields ?? []).filter((n) => {
+    const base = String(n).split('.')[0]
+    return allFields.some((f) => f.name === base)
+  })
   return {
     visibleFields:
       visible.length > 0 ? visible : allFields.slice(0, DEFAULT_VISIBLE).map((f) => f.name),
@@ -191,7 +199,15 @@ function MediaThumbnail({ value }: { value: string }) {
 
 // FieldCell
 
-function FieldCell({ field, value }: { field: FieldDef; value: unknown }) {
+function FieldCell({
+  field,
+  value,
+  displayField,
+}: {
+  field: FieldDef
+  value: unknown
+  displayField?: string
+}) {
   const { timezone } = useSettings()
 
   if (value === null || value === undefined || value === '') {
@@ -218,8 +234,25 @@ function FieldCell({ field, value }: { field: FieldDef; value: unknown }) {
     return <MediaThumbnail value={String(value)} />
   }
 
+  if (field.type === 'relation') {
+    const id = String(value)
+
+    const { data } = useFetch<any>(
+      field.relatedSlug && id ? `/cms/admin/entries/${field.relatedSlug}/${id}` : null,
+    )
+
+    if (!data) {
+      return <span className="text-muted-foreground">…</span>
+    }
+
+    const resolvedValue = (displayField && data?.[displayField]) || data?.title || data?.name || id
+
+    return <span className="font-medium truncate max-w-50 block">{String(resolvedValue)}</span>
+  }
+
   if (field.type === 'text' || field.type === 'richtext') {
     const text = String(value)
+
     return (
       <span className="text-muted-foreground truncate max-w-50 block">
         {text.length > 60 ? text.slice(0, 60) + '…' : text}
@@ -327,7 +360,71 @@ function ConfigureViewDialog({
     }
   }, [open, config])
 
-  const hidden = allFields.filter((f) => !visible.includes(f.name))
+  const hidden = allFields.filter((f) => !visible.some((v) => v.split('.')[0] === f.name))
+
+  function setFieldSub(baseName: string, sub?: string) {
+    setVisible((prev) =>
+      prev.map((v) => {
+        const parts = v.split('.')
+        if (parts[0] !== baseName) return v
+        return sub ? `${baseName}.${sub}` : baseName
+      }),
+    )
+  }
+
+  function RelationFieldSelector({ fieldName }: { fieldName: string }) {
+    const base = fieldName.split('.')[0]
+    const field = allFields.find((f) => f.name === base)
+    const relatedSlug = field?.relatedSlug
+
+    const { data: relatedCt } = useFetch<any>(
+      relatedSlug ? `/cms/admin/content-types/${relatedSlug}` : null,
+    )
+
+    const selected = visible.find((v) => v.split('.')[0] === base)
+    const selectedSub = selected && selected.includes('.') ? selected.split('.')[1] : undefined
+
+    function setFieldSub(baseName: string, sub?: string) {
+      setVisible((prev) =>
+        prev.map((v) => {
+          const parts = v.split('.')
+          if (parts[0] !== baseName) return v
+          return sub ? `${baseName}.${sub}` : baseName
+        }),
+      )
+    }
+
+    useEffect(() => {
+      if (!relatedCt?.fields) return
+      if (selectedSub) return
+
+      const preferred = ['title', 'name']
+      const found =
+        relatedCt.fields.find((f: any) => preferred.includes(f.name)) || relatedCt.fields[0]
+
+      if (found) {
+        setFieldSub(base, found.name)
+      }
+    }, [relatedCt, selectedSub, base])
+
+    if (!relatedCt?.fields) return null
+
+    return (
+      <Select value={selectedSub} onValueChange={(val) => setFieldSub(base, val)}>
+        <SelectTrigger className="h-8 text-sm w-32">
+          <SelectValue />
+        </SelectTrigger>
+
+        <SelectContent>
+          {relatedCt.fields.map((rf: any) => (
+            <SelectItem key={rf.name} value={rf.name}>
+              {rf.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
 
   function move(name: string, dir: -1 | 1) {
     setVisible((prev) => {
@@ -374,14 +471,24 @@ function ConfigureViewDialog({
             ) : (
               <ul className="space-y-1">
                 {visible.map((name, idx) => {
-                  const field = allFields.find((f) => f.name === name)
+                  const base = String(name).split('.')[0]
+                  const sub = String(name).includes('.') ? String(name).split('.')[1] : undefined
+                  const field = allFields.find((f) => f.name === base)
                   return (
                     <li
                       key={name}
                       className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
                     >
-                      <span className="flex-1 font-medium">{humanize(name)}</span>
+                      <span className="flex-1 font-medium">
+                        {humanize(base)}
+                        {sub ? ` · ${humanize(sub)}` : ''}
+                      </span>
                       {field && <span className="text-xs text-muted-foreground">{field.type}</span>}
+                      {field && field.type === 'relation' && (
+                        <div className="ml-2">
+                          <RelationFieldSelector fieldName={name} />
+                        </div>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
@@ -558,6 +665,18 @@ export function EntriesList() {
   }
   const { sort } = config
 
+  // columns: derived from config.visibleFields — support relation.field notation
+  type Column = { field: FieldDef; displayField?: string }
+  const columns: Column[] = (config.visibleFields ?? [])
+    .map((v) => {
+      const parts = String(v).split('.')
+      const base = parts[0]
+      const sub = parts[1]
+      const f = ct?.fields.find((ff) => ff.name === base)
+      return f ? { field: f, displayField: sub } : null
+    })
+    .filter(Boolean) as Column[]
+
   const {
     data: entries,
     loading: loadingEntries,
@@ -661,9 +780,7 @@ export function EntriesList() {
 
   if (!ct) return null
 
-  const visibleFields = config.visibleFields
-    .map((name) => ct.fields.find((f) => f.name === name))
-    .filter(Boolean) as FieldDef[]
+  const visibleFields = columns.map((c) => c.field)
 
   const totalPages = Math.ceil((entries?.total ?? 0) / (entries?.limit ?? 20))
 
@@ -753,12 +870,12 @@ export function EntriesList() {
                         aria-label="Select all"
                       />
                     </TableHead>
-                    {visibleFields.map((field) => (
+                    {columns.map((col) => (
                       <TableHead
-                        key={field.name}
+                        key={col.field.name}
                         className="px-4 py-3 text-left font-medium text-muted-foreground"
                       >
-                        {humanize(field.name)}
+                        {humanize(col.field.name)}
                       </TableHead>
                     ))}
                     <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
@@ -792,11 +909,28 @@ export function EntriesList() {
                           aria-label="Select row"
                         />
                       </TableCell>
-                      {visibleFields.map((field) => (
-                        <TableCell key={field.name} className="px-4 py-3">
-                          <FieldCell field={field} value={entry[field.name]} />
-                        </TableCell>
-                      ))}
+                      {columns.map((col) => {
+                        const rawValue = entry[col.field.name]
+                        let value: unknown = rawValue
+
+                        if (col.displayField) {
+                          if (rawValue && typeof rawValue === 'object') {
+                            value = (rawValue as Record<string, any>)[col.displayField]
+                          } else {
+                            value = (rawValue as any)?.title ?? rawValue
+                          }
+                        }
+
+                        return (
+                          <TableCell key={col.field.name} className="px-4 py-3">
+                            <FieldCell
+                              field={col.field}
+                              value={value}
+                              displayField={col.displayField}
+                            />
+                          </TableCell>
+                        )
+                      })}
                       <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                         {formatDate(entry.created_at, timezone)}
                       </TableCell>
