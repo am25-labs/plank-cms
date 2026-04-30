@@ -1,7 +1,6 @@
 import { type FieldDefinition, SchemaError } from './types.js'
 
 export function quoteIdentifier(name: string): string {
-  assertSafeIdentifier(name)
   return `"${name.replace(/"/g, '""')}"`
 }
 
