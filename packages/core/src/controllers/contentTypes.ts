@@ -12,6 +12,7 @@ import {
   createTable,
   syncTable,
   assertSafeIdentifier,
+  quoteIdentifier,
 } from '@plank/schema'
 import type { ContentType, FieldDefinition, RelationType } from '@plank/schema'
 import { z, flattenError } from 'zod'
@@ -180,7 +181,9 @@ async function removeRelationDependencies(deletedTable: ContentType): Promise<vo
       if (relType === 'many-to-one' || relType === 'one-to-one') {
         // Column exists in this CT's table — drop it (FK constraint already gone via CASCADE)
         try {
-          await pool.query(`ALTER TABLE ${ct.tableName} DROP COLUMN IF EXISTS ${field.name}`)
+          await pool.query(
+            `ALTER TABLE ${quoteIdentifier(ct.tableName)} DROP COLUMN IF EXISTS ${quoteIdentifier(field.name)}`,
+          )
         } catch {
           // table may not exist yet in edge cases
         }
@@ -189,7 +192,7 @@ async function removeRelationDependencies(deletedTable: ContentType): Promise<vo
       if (relType === 'many-to-many') {
         // Drop the junction table if this CT is the source
         const jt = `_rel_${ct.tableName}_${field.name}`
-        await pool.query(`DROP TABLE IF EXISTS ${jt}`)
+        await pool.query(`DROP TABLE IF EXISTS ${quoteIdentifier(jt)}`)
       }
     }
 

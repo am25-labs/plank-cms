@@ -5,6 +5,7 @@ import {
   validate,
   assertSafeIdentifier,
   isVirtualRelation,
+  quoteIdentifier,
 } from '@plank/schema'
 import type { FieldDefinition } from '@plank/schema'
 import { getProvider } from '../media/index.js'
@@ -50,11 +51,11 @@ async function syncManyToMany(
   targetIds: string[],
 ): Promise<void> {
   const jt = junctionTableName(tableName, field.name)
-  await pool.query(`DELETE FROM ${jt} WHERE source_id = $1`, [entryId])
+  await pool.query(`DELETE FROM ${quoteIdentifier(jt)} WHERE source_id = $1`, [entryId])
   if (targetIds.length === 0) return
   const placeholders = targetIds.map((_, i) => `($1, $${i + 2})`).join(', ')
   await pool.query(
-    `INSERT INTO ${jt} (source_id, target_id) VALUES ${placeholders} ON CONFLICT DO NOTHING`,
+    `INSERT INTO ${quoteIdentifier(jt)} (source_id, target_id) VALUES ${placeholders} ON CONFLICT DO NOTHING`,
     [entryId, ...targetIds],
   )
 }
@@ -76,6 +77,7 @@ export const listEntries: SlugParam = async (req, res) => {
   }
 
   assertSafeIdentifier(ct.tableName)
+  const quotedTableName = quoteIdentifier(ct.tableName)
   const isUser = await isUserRole(req.user?.roleId)
   const page = Math.max(1, parseInt(String(req.query.page ?? 1)))
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? 20))))
@@ -87,6 +89,7 @@ export const listEntries: SlugParam = async (req, res) => {
     : 'created_at'
   const sortDir = req.query.order === 'asc' ? 'ASC' : 'DESC'
   assertSafeIdentifier(sortField)
+  const quotedSortField = quoteIdentifier(sortField)
 
   const locale = req.query.locale ? String(req.query.locale) : undefined
   const fallbacks = req.query.fallback ? String(req.query.fallback).split(',') : []
@@ -99,14 +102,14 @@ export const listEntries: SlugParam = async (req, res) => {
   const [{ rows }, { rows: countRows }] = await Promise.all([
     pool.query(
       `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url
-       FROM ${ct.tableName} e
+       FROM ${quotedTableName} e
        LEFT JOIN plank_users u ON u.id = e.created_by
        ${whereClause}
-       ORDER BY e.${sortField} ${sortDir}
+       ORDER BY e.${quotedSortField} ${sortDir}
        LIMIT $1 OFFSET $2`,
       listValues,
     ),
-    pool.query(`SELECT COUNT(*) as count FROM ${ct.tableName} ${countWhereClause}`, countValues),
+    pool.query(`SELECT COUNT(*) as count FROM ${quotedTableName} ${countWhereClause}`, countValues),
   ])
 
   const provider = await getProvider()
@@ -141,7 +144,7 @@ export const listEntries: SlugParam = async (req, res) => {
   if (locale) {
     // compute total matching locale across all rows (lightweight: only fetch localized column)
     try {
-      const { rows: allRows } = await pool.query(`SELECT localized FROM ${ct.tableName}`)
+      const { rows: allRows } = await pool.query(`SELECT localized FROM ${quotedTableName}`)
       const matching = (allRows as any[]).filter((r) => entryMatchesLocale(r, locale))
       total = matching.length
     } catch (err) {
@@ -166,7 +169,7 @@ async function loadManyToManyIds(
     mmFields.map(async (f) => {
       const jt = junctionTableName(tableName, f.name)
       const { rows } = await pool.query<{ target_id: string }>(
-        `SELECT target_id FROM ${jt} WHERE source_id = $1`,
+        `SELECT target_id FROM ${quoteIdentifier(jt)} WHERE source_id = $1`,
         [entryId],
       )
       result[f.name] = rows.map((r) => r.target_id)
@@ -183,8 +186,9 @@ export const getEntry: SlugIdParam = async (req, res) => {
   }
 
   assertSafeIdentifier(ct.tableName)
+  const quotedTableName = quoteIdentifier(ct.tableName)
   const isUser = await isUserRole(req.user?.roleId)
-  const { rows } = await pool.query(`SELECT * FROM ${ct.tableName} WHERE id = $1`, [req.params.id])
+  const { rows } = await pool.query(`SELECT * FROM ${quotedTableName} WHERE id = $1`, [req.params.id])
 
   if (!rows[0]) {
     res.status(404).json({ error: 'Entry not found' })
@@ -214,6 +218,7 @@ export const createEntry: SlugParam = async (req, res) => {
   validate(ct, req.body)
 
   assertSafeIdentifier(ct.tableName)
+  const quotedTableName = quoteIdentifier(ct.tableName)
   const isUser = await isUserRole(req.user?.roleId)
   if (isUser && ct.kind === 'single') {
     res.status(403).json({ error: 'Single types are read-only for User role' })
@@ -232,13 +237,13 @@ export const createEntry: SlugParam = async (req, res) => {
 
   // Single Types: upsert — update the existing entry if one already exists
   if (ct.kind === 'single') {
-    const { rows: existing } = await pool.query(`SELECT id FROM ${ct.tableName} LIMIT 1`)
+    const { rows: existing } = await pool.query(`SELECT id FROM ${quotedTableName} LIMIT 1`)
     if (existing[0]) {
       const setClauses = fields
         .map((f, i) =>
           f.type === 'media-gallery' || f.type === 'array'
-            ? `${f.name} = $${i + 1}::jsonb`
-            : `${f.name} = $${i + 1}`,
+            ? `${quoteIdentifier(f.name)} = $${i + 1}::jsonb`
+            : `${quoteIdentifier(f.name)} = $${i + 1}`,
         )
         .join(', ')
       const extraClauses: string[] = []
@@ -258,8 +263,8 @@ export const createEntry: SlugParam = async (req, res) => {
       ]
       const updateSql =
         fields.length + extraValues.length > 0
-          ? `UPDATE ${ct.tableName} SET ${allClauses}, updated_at = NOW() WHERE id = $${fields.length + extraValues.length + 1} RETURNING *`
-          : `UPDATE ${ct.tableName} SET updated_at = NOW() WHERE id = $1 RETURNING *`
+          ? `UPDATE ${quotedTableName} SET ${allClauses}, updated_at = NOW() WHERE id = $${fields.length + extraValues.length + 1} RETURNING *`
+          : `UPDATE ${quotedTableName} SET updated_at = NOW() WHERE id = $1 RETURNING *`
       const updateValues = fields.length + extraValues.length > 0 ? values : [existing[0].id]
       const { rows } = await pool.query(updateSql, updateValues)
       await Promise.all(
@@ -283,7 +288,9 @@ export const createEntry: SlugParam = async (req, res) => {
     extraPlaceholders.push(`$${3 + fields.length}::jsonb`)
     extraValues.push(JSON.stringify(req.body.localized))
   }
-  const cols = ['id', 'created_by', ...fields.map((f) => f.name), ...extraCols].join(', ')
+  const cols = ['id', 'created_by', ...fields.map((f) => f.name), ...extraCols]
+    .map((col) => quoteIdentifier(col))
+    .join(', ')
   const placeholders = [
     '$1',
     '$2',
@@ -303,7 +310,7 @@ export const createEntry: SlugParam = async (req, res) => {
   ]
 
   const { rows } = await pool.query(
-    `INSERT INTO ${ct.tableName} (${cols}) VALUES (${placeholders}) RETURNING *`,
+    `INSERT INTO ${quotedTableName} (${cols}) VALUES (${placeholders}) RETURNING *`,
     values,
   )
   await Promise.all(
@@ -328,7 +335,8 @@ export const getSingleEntry: SlugParam = async (req, res) => {
   }
 
   assertSafeIdentifier(ct.tableName)
-  const { rows } = await pool.query(`SELECT * FROM ${ct.tableName} LIMIT 1`)
+  const quotedTableName = quoteIdentifier(ct.tableName)
+  const { rows } = await pool.query(`SELECT * FROM ${quotedTableName} LIMIT 1`)
 
   if (!rows[0]) {
     res.status(404).json({ error: 'No entry found' })
@@ -354,6 +362,7 @@ export const updateEntry: SlugIdParam = async (req, res) => {
   validate(ct, req.body)
 
   assertSafeIdentifier(ct.tableName)
+  const quotedTableName = quoteIdentifier(ct.tableName)
   const isUser = await isUserRole(req.user?.roleId)
   if (isUser && ct.kind === 'single') {
     res.status(403).json({ error: 'Single types are read-only for User role' })
@@ -361,7 +370,7 @@ export const updateEntry: SlugIdParam = async (req, res) => {
   }
   if (isUser && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
-      `SELECT created_by FROM ${ct.tableName} WHERE id = $1`,
+      `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
     )
     if (!authorRows[0]) {
@@ -387,8 +396,8 @@ export const updateEntry: SlugIdParam = async (req, res) => {
   const setClauses = fields
     .map((f, i) =>
       f.type === 'media-gallery' || f.type === 'array'
-        ? `${f.name} = $${i + 1}::jsonb`
-        : `${f.name} = $${i + 1}`,
+        ? `${quoteIdentifier(f.name)} = $${i + 1}::jsonb`
+        : `${quoteIdentifier(f.name)} = $${i + 1}`,
     )
     .join(', ')
   const extraClauses: string[] = []
@@ -409,8 +418,8 @@ export const updateEntry: SlugIdParam = async (req, res) => {
 
   const updateSql =
     fields.length + extraValues.length > 0
-      ? `UPDATE ${ct.tableName} SET ${allClauses}, updated_at = NOW() WHERE id = $${fields.length + extraValues.length + 1} RETURNING *`
-      : `UPDATE ${ct.tableName} SET updated_at = NOW() WHERE id = $1 RETURNING *`
+      ? `UPDATE ${quotedTableName} SET ${allClauses}, updated_at = NOW() WHERE id = $${fields.length + extraValues.length + 1} RETURNING *`
+      : `UPDATE ${quotedTableName} SET updated_at = NOW() WHERE id = $1 RETURNING *`
   const updateValues = fields.length + extraValues.length > 0 ? values : [req.params.id]
 
   const { rows } = await pool.query(updateSql, updateValues)
@@ -444,7 +453,7 @@ const SNAPSHOT_EXCLUDED = [
 
 function buildSnapshotExpr(tableName: string): string {
   const strip = SNAPSHOT_EXCLUDED.reduce((expr, col) => `${expr} - ${col}`, `to_jsonb(t.*)`)
-  return `(SELECT ${strip} FROM ${tableName} t WHERE t.id = $1)`
+  return `(SELECT ${strip} FROM ${quoteIdentifier(tableName)} t WHERE t.id = $1)`
 }
 
 export const patchEntryStatus: SlugIdParam = async (req, res) => {
@@ -472,6 +481,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
   }
 
   assertSafeIdentifier(ct.tableName)
+  const quotedTableName = quoteIdentifier(ct.tableName)
   const isUser = await isUserRole(req.user?.roleId)
   if (isUser && ct.kind === 'single') {
     res.status(403).json({ error: 'Single types are read-only for User role' })
@@ -479,7 +489,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
   }
   if (isUser && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
-      `SELECT created_by FROM ${ct.tableName} WHERE id = $1`,
+      `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
     )
     if (!authorRows[0]) {
@@ -497,7 +507,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
 
   if (status === 'published') {
     sql = `
-      UPDATE ${ct.tableName} SET
+      UPDATE ${quotedTableName} SET
         status = 'published',
         published_data = ${buildSnapshotExpr(ct.tableName)},
         published_at = NOW(),
@@ -509,7 +519,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
     values = [req.params.id]
   } else if (status === 'scheduled') {
     sql = `
-      UPDATE ${ct.tableName} SET
+      UPDATE ${quotedTableName} SET
         status = 'scheduled',
         scheduled_for = $2,
         updated_at = NOW()
@@ -519,7 +529,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
     values = [req.params.id, scheduled_for]
   } else {
     sql = `
-      UPDATE ${ct.tableName} SET
+      UPDATE ${quotedTableName} SET
         status = 'draft',
         published_data = NULL,
         published_at = NULL,
@@ -553,6 +563,7 @@ export const deleteEntry: SlugIdParam = async (req, res) => {
   }
 
   assertSafeIdentifier(ct.tableName)
+  const quotedTableName = quoteIdentifier(ct.tableName)
   const isUser = await isUserRole(req.user?.roleId)
   if (isUser && ct.kind === 'single') {
     res.status(403).json({ error: 'Single types are read-only for User role' })
@@ -560,7 +571,7 @@ export const deleteEntry: SlugIdParam = async (req, res) => {
   }
   if (isUser && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
-      `SELECT created_by FROM ${ct.tableName} WHERE id = $1`,
+      `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
     )
     if (!authorRows[0]) {
@@ -572,7 +583,7 @@ export const deleteEntry: SlugIdParam = async (req, res) => {
       return
     }
   }
-  const { rowCount } = await pool.query(`DELETE FROM ${ct.tableName} WHERE id = $1`, [
+  const { rowCount } = await pool.query(`DELETE FROM ${quotedTableName} WHERE id = $1`, [
     req.params.id,
   ])
 

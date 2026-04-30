@@ -1,6 +1,7 @@
 import { pool } from '@plank/db'
 import {
   assertSafeIdentifier,
+  quoteIdentifier,
   toPostgresType,
   isVirtualRelation,
   hasRelationColumn,
@@ -13,7 +14,7 @@ function buildColumnDef(field: FieldDefinition): string | null {
   assertSafeIdentifier(field.name)
   const pgType = toPostgresType(field)
   const notNull = field.required ? ' NOT NULL' : ''
-  return `${field.name} ${pgType}${notNull}`
+  return `${quoteIdentifier(field.name)} ${pgType}${notNull}`
 }
 
 function junctionTableName(sourceTable: string, fieldName: string): string {
@@ -27,10 +28,13 @@ function buildJunctionTableSQL(
 ): string {
   const jt = junctionTableName(sourceTable, fieldName)
   assertSafeIdentifier(targetTable)
+  const quotedJt = quoteIdentifier(jt)
+  const quotedSourceTable = quoteIdentifier(sourceTable)
+  const quotedTargetTable = quoteIdentifier(targetTable)
   return [
-    `CREATE TABLE IF NOT EXISTS ${jt} (`,
-    `  source_id TEXT NOT NULL REFERENCES ${sourceTable}(id) ON DELETE CASCADE,`,
-    `  target_id TEXT NOT NULL REFERENCES ${targetTable}(id) ON DELETE CASCADE,`,
+    `CREATE TABLE IF NOT EXISTS ${quotedJt} (`,
+    `  source_id TEXT NOT NULL REFERENCES ${quotedSourceTable}(id) ON DELETE CASCADE,`,
+    `  target_id TEXT NOT NULL REFERENCES ${quotedTargetTable}(id) ON DELETE CASCADE,`,
     `  PRIMARY KEY (source_id, target_id)`,
     `)`,
   ].join('\n')
@@ -44,12 +48,13 @@ function relationSignature(field: FieldDefinition): string {
 
 export async function createTable(contentType: ContentType): Promise<void> {
   assertSafeIdentifier(contentType.tableName)
+  const quotedTableName = quoteIdentifier(contentType.tableName)
 
   const columnFields = contentType.fields.filter((f) => !isVirtualRelation(f))
   const columns = columnFields.map(buildColumnDef).filter(Boolean) as string[]
 
   const sql = [
-    `CREATE TABLE IF NOT EXISTS ${contentType.tableName} (`,
+    `CREATE TABLE IF NOT EXISTS ${quotedTableName} (`,
     `  id         TEXT PRIMARY KEY,`,
     ...columns.map((col) => `  ${col},`),
     `  localized      JSONB,`,
@@ -68,7 +73,7 @@ export async function createTable(contentType: ContentType): Promise<void> {
   // Create a GIN index for the localized JSONB column to support locale queries
   try {
     await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_${contentType.tableName}_localized_gin ON ${contentType.tableName} USING gin (localized)`,
+      `CREATE INDEX IF NOT EXISTS idx_${contentType.tableName}_localized_gin ON ${quotedTableName} USING gin (localized)`,
     )
   } catch (err) {
     // ignore index creation errors
@@ -87,6 +92,7 @@ export async function createTable(contentType: ContentType): Promise<void> {
 
 export async function syncTable(next: ContentType, prev: ContentType): Promise<void> {
   assertSafeIdentifier(next.tableName)
+  const quotedTableName = quoteIdentifier(next.tableName)
 
   const prevFields = new Map(prev.fields.map((f) => [f.name, f]))
   const nextFields = new Map(next.fields.map((f) => [f.name, f]))
@@ -101,7 +107,7 @@ export async function syncTable(next: ContentType, prev: ContentType): Promise<v
       assertSafeIdentifier(name)
       const colDef = buildColumnDef(field)
       if (colDef)
-        statements.push(`ALTER TABLE ${next.tableName} ADD COLUMN IF NOT EXISTS ${colDef}`)
+        statements.push(`ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS ${colDef}`)
 
       if (
         field.type === 'relation' &&
@@ -120,7 +126,7 @@ export async function syncTable(next: ContentType, prev: ContentType): Promise<v
       assertSafeIdentifier(name)
 
       if (!isVirtualRelation(prevField)) {
-        statements.push(`ALTER TABLE ${next.tableName} DROP COLUMN ${name}`)
+        statements.push(`ALTER TABLE ${quotedTableName} DROP COLUMN ${quoteIdentifier(name)}`)
       }
 
       if (
@@ -153,13 +159,13 @@ export async function syncTable(next: ContentType, prev: ContentType): Promise<v
       }
 
       if (hasRelationColumn(prevField)) {
-        statements.push(`ALTER TABLE ${next.tableName} DROP COLUMN IF EXISTS ${name}`)
+        statements.push(`ALTER TABLE ${quotedTableName} DROP COLUMN IF EXISTS ${quoteIdentifier(name)}`)
       }
 
       if (hasRelationColumn(nextField)) {
         const colDef = buildColumnDef(nextField)
         if (colDef)
-          statements.push(`ALTER TABLE ${next.tableName} ADD COLUMN IF NOT EXISTS ${colDef}`)
+          statements.push(`ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS ${colDef}`)
       }
 
       if (
@@ -178,7 +184,7 @@ export async function syncTable(next: ContentType, prev: ContentType): Promise<v
       assertSafeIdentifier(name)
       const pgType = toPostgresType(nextField)
       statements.push(
-        `ALTER TABLE ${next.tableName} ALTER COLUMN ${name} TYPE ${pgType} USING ${name}::text::${pgType}`,
+        `ALTER TABLE ${quotedTableName} ALTER COLUMN ${quoteIdentifier(name)} TYPE ${pgType} USING ${quoteIdentifier(name)}::text::${pgType}`,
       )
     }
   }
@@ -209,6 +215,7 @@ export async function syncAllTables(): Promise<void> {
 
   for (const ct of contentTypes) {
     assertSafeIdentifier(ct.tableName)
+    const quotedTableName = quoteIdentifier(ct.tableName)
 
     const { rows } = await pool.query<{ column_name: string }>(
       `SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'`,
@@ -219,11 +226,11 @@ export async function syncAllTables(): Promise<void> {
     // Ensure `localized` column exists on existing tables to support per-entry JSONB localization
     if (!existingColumns.has('localized')) {
       try {
-        await pool.query(`ALTER TABLE ${ct.tableName} ADD COLUMN IF NOT EXISTS localized JSONB`)
+        await pool.query(`ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS localized JSONB`)
         existingColumns.add('localized')
         try {
           await pool.query(
-            `CREATE INDEX IF NOT EXISTS idx_${ct.tableName}_localized_gin ON ${ct.tableName} USING gin (localized)`,
+            `CREATE INDEX IF NOT EXISTS idx_${ct.tableName}_localized_gin ON ${quotedTableName} USING gin (localized)`,
           )
         } catch (err) {
           // ignore index creation errors
@@ -239,7 +246,7 @@ export async function syncAllTables(): Promise<void> {
         assertSafeIdentifier(field.name)
         const colDef = buildColumnDef(field)
         if (colDef) {
-          await pool.query(`ALTER TABLE ${ct.tableName} ADD COLUMN IF NOT EXISTS ${colDef}`)
+          await pool.query(`ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS ${colDef}`)
           console.log(`[plank] Added missing column "${field.name}" to table "${ct.tableName}"`)
         }
       }

@@ -1,5 +1,10 @@
 import { type FieldDefinition, SchemaError } from './types.js'
 
+export function quoteIdentifier(name: string): string {
+  assertSafeIdentifier(name)
+  return `"${name.replace(/"/g, '""')}"`
+}
+
 export function toPostgresType(field: FieldDefinition): string {
   switch (field.type) {
     case 'string':
@@ -23,9 +28,9 @@ export function toPostgresType(field: FieldDefinition): string {
         throw new SchemaError(`"${relType}" relation does not produce a column`)
       }
       if (!field.relatedTable) return 'TEXT'
-      assertSafeIdentifier(field.relatedTable)
+      const relatedTable = quoteIdentifier(field.relatedTable)
       const unique = relType === 'one-to-one' ? ' UNIQUE' : ''
-      return `TEXT${unique} REFERENCES ${field.relatedTable}(id) ON DELETE SET NULL`
+      return `TEXT${unique} REFERENCES ${relatedTable}(id) ON DELETE SET NULL`
     }
     case 'uid':
       return 'VARCHAR(255) UNIQUE'
