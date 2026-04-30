@@ -71,7 +71,12 @@ function ToolbarDivider() {
   return <div className="mx-0.5 h-4 w-px bg-border" />
 }
 
-export function RichTextEditor({ value, onChange, placeholder, onInsertImage }: RichTextEditorProps) {
+export function RichTextEditor({
+  value,
+  onChange,
+  placeholder,
+  onInsertImage,
+}: RichTextEditorProps) {
   const [isEmpty, setIsEmpty] = useState(!value)
 
   const editor = useEditor({
@@ -99,7 +104,7 @@ export function RichTextEditor({ value, onChange, placeholder, onInsertImage }: 
     })(),
     editorProps: {
       attributes: {
-        class: 'h-96 px-3 py-2.5 focus:outline-none',
+        class: 'h-128 px-3 py-2.5 focus:outline-none',
       },
     },
     onUpdate({ editor }) {
@@ -129,7 +134,16 @@ export function RichTextEditor({ value, onChange, placeholder, onInsertImage }: 
     const img = await onInsertImage()
     if (!img) return
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    editor.chain().focus().setImage({ src: img.src, alt: img.alt ?? undefined, width: img.width ?? undefined, height: img.height ?? undefined } as any).run()
+    editor
+      .chain()
+      .focus()
+      .setImage({
+        src: img.src,
+        alt: img.alt ?? undefined,
+        width: img.width ?? undefined,
+        height: img.height ?? undefined,
+      } as any)
+      .run()
   }
 
   function handleSetLink() {
