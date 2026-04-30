@@ -472,17 +472,13 @@ function ConfigureViewDialog({
               <ul className="space-y-1">
                 {visible.map((name, idx) => {
                   const base = String(name).split('.')[0]
-                  const sub = String(name).includes('.') ? String(name).split('.')[1] : undefined
                   const field = allFields.find((f) => f.name === base)
                   return (
                     <li
                       key={name}
                       className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
                     >
-                      <span className="flex-1 font-medium">
-                        {humanize(base)}
-                        {sub ? ` · ${humanize(sub)}` : ''}
-                      </span>
+                      <span className="flex-1 font-medium">{humanize(base)}</span>
                       {field && <span className="text-xs text-muted-foreground">{field.type}</span>}
                       {field && field.type === 'relation' && (
                         <div className="ml-2">
