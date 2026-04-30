@@ -17,6 +17,91 @@ import {
 import type { ContentType, FieldDefinition, RelationType } from '@plank/schema'
 import { z, flattenError } from 'zod'
 
+const RESERVED_SQL_IDENTIFIERS = new Set([
+  'all',
+  'analyse',
+  'analyze',
+  'and',
+  'any',
+  'array',
+  'as',
+  'asc',
+  'asymmetric',
+  'authorization',
+  'between',
+  'binary',
+  'both',
+  'case',
+  'cast',
+  'check',
+  'collate',
+  'column',
+  'constraint',
+  'create',
+  'cross',
+  'current_catalog',
+  'current_date',
+  'current_role',
+  'current_schema',
+  'current_time',
+  'current_timestamp',
+  'current_user',
+  'default',
+  'deferrable',
+  'desc',
+  'distinct',
+  'do',
+  'else',
+  'end',
+  'except',
+  'false',
+  'fetch',
+  'for',
+  'foreign',
+  'from',
+  'grant',
+  'group',
+  'having',
+  'in',
+  'initially',
+  'intersect',
+  'into',
+  'lateral',
+  'leading',
+  'limit',
+  'localtime',
+  'localtimestamp',
+  'not',
+  'null',
+  'offset',
+  'on',
+  'only',
+  'or',
+  'order',
+  'placing',
+  'primary',
+  'references',
+  'returning',
+  'select',
+  'session_user',
+  'some',
+  'symmetric',
+  'table',
+  'then',
+  'to',
+  'trailing',
+  'true',
+  'union',
+  'unique',
+  'user',
+  'using',
+  'variadic',
+  'when',
+  'where',
+  'window',
+  'with',
+])
+
 const ArraySubFieldSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]*$/, 'Sub-field name must be lowercase with underscores'),
   type: z.enum(['string', 'text', 'richtext', 'number', 'boolean', 'datetime', 'media']),
@@ -51,6 +136,34 @@ const ContentTypeSchema = z.object({
 const CreateContentTypeSchema = ContentTypeSchema.extend({
   kind: z.enum(['collection', 'single']).default('collection'),
 })
+
+function isReservedSqlIdentifier(name: string): boolean {
+  return RESERVED_SQL_IDENTIFIERS.has(name.toLowerCase())
+}
+
+function findReservedIdentifierErrors(ct: { tableName: string; fields: FieldDefinition[] }): string[] {
+  const errors: string[] = []
+
+  if (isReservedSqlIdentifier(ct.tableName)) {
+    errors.push(`Table name "${ct.tableName}" is reserved by SQL. Choose a different content type slug.`)
+  }
+
+  for (const field of ct.fields) {
+    if (isReservedSqlIdentifier(field.name)) {
+      errors.push(`Field name "${field.name}" is reserved by SQL.`)
+    }
+
+    if (field.type === 'array') {
+      for (const subField of field.arrayFields ?? []) {
+        if (isReservedSqlIdentifier(subField.name)) {
+          errors.push(`Sub-field name "${subField.name}" in array field "${field.name}" is reserved by SQL.`)
+        }
+      }
+    }
+  }
+
+  return errors
+}
 
 // Returns the inverse relationType for a given relationType.
 function inverseRelationType(rt: RelationType): RelationType {
@@ -224,6 +337,12 @@ export const createContentType: RequestHandler = async (req, res) => {
     return
   }
 
+  const reservedErrors = findReservedIdentifierErrors(parsed.data)
+  if (reservedErrors.length > 0) {
+    res.status(400).json({ errors: { formErrors: reservedErrors, fieldErrors: {} } })
+    return
+  }
+
   const ct = await saveContentType(parsed.data)
   await createTable(ct)
   try {
@@ -244,6 +363,12 @@ export const updateContentType: SlugParam = async (req, res) => {
   const parsed = ContentTypeSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
+    return
+  }
+
+  const reservedErrors = findReservedIdentifierErrors(parsed.data)
+  if (reservedErrors.length > 0) {
+    res.status(400).json({ errors: { formErrors: reservedErrors, fieldErrors: {} } })
     return
   }
 

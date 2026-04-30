@@ -207,6 +207,95 @@ const RELATION_TYPE_OPTIONS: { value: RelationType; label: string; description: 
   { value: 'many-to-many', label: 'Many-to-Many', description: 'Many of these ↔ many of the other' },
 ]
 
+const RESERVED_SQL_IDENTIFIERS = new Set([
+  'all',
+  'analyse',
+  'analyze',
+  'and',
+  'any',
+  'array',
+  'as',
+  'asc',
+  'asymmetric',
+  'authorization',
+  'between',
+  'binary',
+  'both',
+  'case',
+  'cast',
+  'check',
+  'collate',
+  'column',
+  'constraint',
+  'create',
+  'cross',
+  'current_catalog',
+  'current_date',
+  'current_role',
+  'current_schema',
+  'current_time',
+  'current_timestamp',
+  'current_user',
+  'default',
+  'deferrable',
+  'desc',
+  'distinct',
+  'do',
+  'else',
+  'end',
+  'except',
+  'false',
+  'fetch',
+  'for',
+  'foreign',
+  'from',
+  'grant',
+  'group',
+  'having',
+  'in',
+  'initially',
+  'intersect',
+  'into',
+  'lateral',
+  'leading',
+  'limit',
+  'localtime',
+  'localtimestamp',
+  'not',
+  'null',
+  'offset',
+  'on',
+  'only',
+  'or',
+  'order',
+  'placing',
+  'primary',
+  'references',
+  'returning',
+  'select',
+  'session_user',
+  'some',
+  'symmetric',
+  'table',
+  'then',
+  'to',
+  'trailing',
+  'true',
+  'union',
+  'unique',
+  'user',
+  'using',
+  'variadic',
+  'when',
+  'where',
+  'window',
+  'with',
+])
+
+function isReservedSqlIdentifier(name: string) {
+  return RESERVED_SQL_IDENTIFIERS.has(name.toLowerCase())
+}
+
 type ConfigState = {
   name: string
   required: boolean
@@ -326,6 +415,7 @@ export function AddFieldDialog({
     const trimmed = subFieldDraft.name.trim()
     if (!trimmed) { setSubFieldNameError('Name is required'); return }
     if (!/^[a-z][a-z0-9_]*$/.test(trimmed)) { setSubFieldNameError('Lowercase letters, digits and underscores only'); return }
+    if (isReservedSqlIdentifier(trimmed)) { setSubFieldNameError('This name is reserved by SQL. Choose another one.'); return }
     if (config.arrayFields.some((f) => f.name === trimmed)) { setSubFieldNameError('A sub-field with this name already exists'); return }
     const newSubField: ArraySubField = {
       name: trimmed,
@@ -352,6 +442,10 @@ export function AddFieldDialog({
     }
     if (!/^[a-z][a-z0-9_]*$/.test(trimmed)) {
       setNameError('Lowercase letters, digits and underscores only')
+      return false
+    }
+    if (isReservedSqlIdentifier(trimmed)) {
+      setNameError('This name is reserved by SQL. Choose another one.')
       return false
     }
     if (existingNames.includes(trimmed) && trimmed !== initialField?.name) {
