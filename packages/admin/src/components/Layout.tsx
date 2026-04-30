@@ -81,7 +81,7 @@ function LayoutShell() {
 
           {/* New Entry */}
           {(user?.permissions?.includes('*') || user?.permissions?.includes('entries:write')) && (
-            <div className="mt-5 px-3">
+            <div className="mt-4 px-3">
               <Button
                 size="icon"
                 onClick={() => {
