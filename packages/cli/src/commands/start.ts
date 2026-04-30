@@ -8,6 +8,6 @@ export async function start(): Promise<void> {
   // Apunta al admin compilado que viaja junto al bundle en dist/admin/
   process.env.PLANK_ADMIN_DIST = join(dirname(fileURLToPath(import.meta.url)), 'admin')
 
-  const { start: startServer } = await import('@plank/core/server')
+  const { start: startServer } = await import('@plank-cms/core/server')
   await startServer()
 }

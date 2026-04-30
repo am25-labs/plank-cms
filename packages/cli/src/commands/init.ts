@@ -29,7 +29,7 @@ function buildPackageJson(name: string): object {
       start: 'plank start',
     },
     dependencies: {
-      '@am25/plank-cms': PACKAGE_VERSION,
+      '@plank-cms/plank-cms': PACKAGE_VERSION,
     },
   }
 }

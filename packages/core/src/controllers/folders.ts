@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { pool, createId } from '@plank/db'
+import { pool, createId } from '@plank-cms/db'
 
 type FolderRow = {
   id: string

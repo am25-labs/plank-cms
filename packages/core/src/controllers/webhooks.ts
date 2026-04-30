@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { pool, createId } from '@plank/db'
+import { pool, createId } from '@plank-cms/db'
 import { z, flattenError } from 'zod'
 
 export type WebhookEvent =

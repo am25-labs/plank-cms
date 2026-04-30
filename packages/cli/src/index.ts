@@ -15,7 +15,7 @@ switch (command) {
     await publishScheduled()
     break
   default:
-    // Allow: npx @am25/plank-cms my-project (sin subcomando)
+    // Allow: npx @plank-cms/plank-cms my-project (sin subcomando)
     if (command && !command.startsWith('-')) {
       await init(command)
     } else {

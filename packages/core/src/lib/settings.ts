@@ -1,4 +1,4 @@
-import { pool } from '@plank/db'
+import { pool } from '@plank-cms/db'
 import { encrypt, decrypt } from './encrypt.js'
 
 // Fields that are encrypted at rest per namespace

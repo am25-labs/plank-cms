@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 import { randomBytes } from 'node:crypto'
-import { pool, createId } from '@plank/db'
+import { pool, createId } from '@plank-cms/db'
 import { getProvider } from '../media/index.js'
 
 const MEDIA_PREFIX = 'media'

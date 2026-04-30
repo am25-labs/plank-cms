@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express'
 import { createHash } from 'node:crypto'
-import { pool } from '@plank/db'
+import { pool } from '@plank-cms/db'
 
 const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
 

@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { pool, createId } from '@plank/db'
+import { pool, createId } from '@plank-cms/db'
 import { z, flattenError } from 'zod'
 import { getProvider } from '../media/index.js'
 

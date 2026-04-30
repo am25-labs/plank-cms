@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express'
 import { randomBytes, createHash } from 'node:crypto'
-import { pool, createId } from '@plank/db'
+import { pool, createId } from '@plank-cms/db'
 import { z, flattenError } from 'zod'
 
 const CreateTokenSchema = z.object({

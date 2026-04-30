@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { pool, DEFAULT_ROLE_PERMISSIONS } from '@plank/db'
+import { pool, DEFAULT_ROLE_PERMISSIONS } from '@plank-cms/db'
 import { z } from 'zod'
 
 type RoleRow = { id: string; name: string; permissions: string[] }

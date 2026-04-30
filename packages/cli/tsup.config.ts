@@ -10,7 +10,7 @@ export default defineConfig({
   format: ['esm'],
   target: 'node20',
   banner: { js: '#!/usr/bin/env node' },
-  noExternal: ['@plank/core', '@plank/db', '@plank/schema'],
+  noExternal: ['@plank-cms/core', '@plank-cms/db', '@plank-cms/schema'],
   clean: true,
   dts: false,
   async onSuccess() {
@@ -31,7 +31,7 @@ export default defineConfig({
         { recursive: true },
       )
     } catch {
-      console.warn('[cli] Admin assets not found — run pnpm --filter @plank/admin build first')
+      console.warn('[cli] Admin assets not found — run pnpm --filter @plank-cms/admin build first')
     }
   },
 })

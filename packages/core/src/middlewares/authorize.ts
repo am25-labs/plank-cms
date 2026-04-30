@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { pool } from '@plank/db'
+import { pool } from '@plank-cms/db'
 
 export function authorize(permission: string) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {

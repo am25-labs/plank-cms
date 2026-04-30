@@ -1,4 +1,4 @@
-import { pool } from '@plank/db'
+import { pool } from '@plank-cms/db'
 import {
   assertSafeIdentifier,
   quoteIdentifier,

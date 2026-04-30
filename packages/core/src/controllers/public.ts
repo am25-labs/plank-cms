@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express'
-import { pool } from '@plank/db'
-import { findContentTypeBySlug, assertSafeIdentifier } from '@plank/schema'
-import type { ContentType } from '@plank/schema'
+import { pool } from '@plank-cms/db'
+import { findContentTypeBySlug, assertSafeIdentifier } from '@plank-cms/schema'
+import type { ContentType } from '@plank-cms/schema'
 import { getProvider } from '../media/index.js'
 
 type SlugParam = RequestHandler<{ slug: string }>

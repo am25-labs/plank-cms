@@ -1,13 +1,13 @@
 import type { RequestHandler } from 'express'
-import { pool, createId } from '@plank/db'
+import { pool, createId } from '@plank-cms/db'
 import {
   findContentTypeBySlug,
   validate,
   assertSafeIdentifier,
   isVirtualRelation,
   quoteIdentifier,
-} from '@plank/schema'
-import type { FieldDefinition } from '@plank/schema'
+} from '@plank-cms/schema'
+import type { FieldDefinition } from '@plank-cms/schema'
 import { getProvider } from '../media/index.js'
 import { triggerWebhooks } from './webhooks.js'
 
@@ -158,7 +158,7 @@ export const listEntries: SlugParam = async (req, res) => {
 async function loadManyToManyIds(
   entryId: string,
   tableName: string,
-  fields: import('@plank/schema').FieldDefinition[],
+  fields: import('@plank-cms/schema').FieldDefinition[],
 ): Promise<Record<string, string[]>> {
   const mmFields = fields.filter(
     (f) => f.type === 'relation' && (f.relationType ?? 'many-to-one') === 'many-to-many',

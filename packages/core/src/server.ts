@@ -1,5 +1,5 @@
-import { migrate } from '@plank/db'
-import { syncAllTables } from '@plank/schema'
+import { migrate } from '@plank-cms/db'
+import { syncAllTables } from '@plank-cms/schema'
 import app from './app.js'
 
 export async function start(): Promise<void> {

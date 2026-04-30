@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express'
 
 type SlugParam = RequestHandler<{ slug: string }>
-import { pool } from '@plank/db'
+import { pool } from '@plank-cms/db'
 import {
   findAllContentTypes,
   findContentTypeBySlug,
@@ -13,8 +13,8 @@ import {
   syncTable,
   assertSafeIdentifier,
   quoteIdentifier,
-} from '@plank/schema'
-import type { ContentType, FieldDefinition, RelationType } from '@plank/schema'
+} from '@plank-cms/schema'
+import type { ContentType, FieldDefinition, RelationType } from '@plank-cms/schema'
 import { z, flattenError } from 'zod'
 
 const RESERVED_SQL_IDENTIFIERS = new Set([

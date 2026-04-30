@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { pool } from '@plank/db'
+import { pool } from '@plank-cms/db'
 import { z } from 'zod'
 
 const SetPrefSchema = z.object({ value: z.unknown() })

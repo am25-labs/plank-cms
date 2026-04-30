@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express'
-import { ValidationError, SchemaError } from '@plank/schema'
+import { ValidationError, SchemaError } from '@plank-cms/schema'
 import { ZodError, flattenError } from 'zod'
 
 export function errorHandler(
