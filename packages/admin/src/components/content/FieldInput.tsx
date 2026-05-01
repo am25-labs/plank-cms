@@ -18,6 +18,12 @@ import { Textarea } from '@/components/ui/textarea.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { Label } from '@/components/ui/label.tsx'
 import { Button } from '@/components/ui/button.tsx'
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion.tsx'
 import { Calendar } from '@/components/ui/calendar.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.tsx'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx'
@@ -526,14 +532,14 @@ function SortableGalleryItem({
         <XIcon className="size-3" />
       </button>
       {!disabled && (
-      <button
-        type="button"
-        className="absolute bottom-6 left-1 flex size-5 cursor-grab items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm active:cursor-grabbing"
-        {...listeners}
-        {...attributes}
-      >
-        <GripVerticalIcon className="size-3" />
-      </button>
+        <button
+          type="button"
+          className="absolute bottom-6 left-1 flex size-5 cursor-grab items-center justify-center rounded-full bg-background/80 text-foreground shadow-sm active:cursor-grabbing"
+          {...listeners}
+          {...attributes}
+        >
+          <GripVerticalIcon className="size-3" />
+        </button>
       )}
     </div>
   )
@@ -799,7 +805,11 @@ function DateTimeInput({
     <div className="flex items-center gap-2">
       <Popover open={calOpen && !disabled} onOpenChange={setCalOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" className="w-40 justify-between font-normal text-base" disabled={disabled}>
+          <Button
+            variant="outline"
+            className="w-40 justify-between font-normal text-base"
+            disabled={disabled}
+          >
             {date ? format(date, 'MMM d, yyyy') : 'Select date'}
             <ChevronDownIcon className="size-4 opacity-50" />
           </Button>
@@ -1212,65 +1222,81 @@ function ArrayInput({
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((item, index) => (
-        <div key={index} className="rounded-md border border-dashed p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-            <div className="flex items-center gap-0.5">
-              <Button
-                size="icon"
-                variant="ghost"
-                disabled={disabled || index === 0}
-                onClick={() => handleMoveItem(index, -1)}
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
-              >
-                <ChevronUpIcon className="size-3.5" />
-              </Button>
-              <Button
-                size="icon"
-                variant="ghost"
-                disabled={disabled || index === items.length - 1}
-                onClick={() => handleMoveItem(index, 1)}
-                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
-              >
-                <ChevronDownIcon className="size-3.5" />
-              </Button>
-              <button
-                type="button"
-                onClick={() => handleRemoveItem(index)}
-                disabled={disabled}
-                className="flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2Icon className="size-3.5" />
-              </button>
-            </div>
-          </div>
-          <div className="grid grid-cols-6 gap-3">
-            {subFields.map((sf) => (
-              <div key={sf.name} className={ARRAY_ITEM_WIDTH[sf.width ?? 'full'] ?? 'col-span-6'}>
-                <div className="mb-1 flex items-center gap-1">
-                  <Label className="text-xs font-medium">
-                    {sf.name}
-                    {sf.required && <span className="ml-0.5 text-destructive">*</span>}
-                  </Label>
-                </div>
-                <FieldInput
-                  field={{ ...sf, type: sf.type as FieldType }}
-                  value={item[sf.name] ?? null}
-                  onChange={(v) => handleItemChange(index, sf.name, v)}
-                  allValues={item}
+      <Accordion type="single" collapsible className="w-full">
+        {items.map((item, index) => (
+          <AccordionItem
+            key={index}
+            value={`item-${index}`}
+            className="mb-2 rounded-md border border-dashed last:border-b transition-colors hover:bg-accent/50"
+          >
+            <div className="relative data-[state=open]:border-b data-[state=open]:border-border/50">
+              <AccordionTrigger className="w-full py-2 pl-3 pr-24 text-muted-foreground [&>svg]:hidden">
+                Item {index + 1}
+              </AccordionTrigger>
+              <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  disabled={disabled || index === 0}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => handleMoveItem(index, -1)}
+                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                >
+                  <ChevronUpIcon className="size-3.5" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  disabled={disabled || index === items.length - 1}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => handleMoveItem(index, 1)}
+                  className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                >
+                  <ChevronDownIcon className="size-3.5" />
+                </Button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={() => handleRemoveItem(index)}
                   disabled={disabled}
-                />
+                  className="flex size-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2Icon className="size-3.5" />
+                </button>
               </div>
-            ))}
-          </div>
-        </div>
-      ))}
+            </div>
+            <AccordionContent className="px-3 pt-3">
+              <div className="grid grid-cols-6 gap-3">
+                {subFields.map((sf) => (
+                  <div
+                    key={sf.name}
+                    className={ARRAY_ITEM_WIDTH[sf.width ?? 'full'] ?? 'col-span-6'}
+                  >
+                    <div className="mb-1 flex items-center gap-1">
+                      <Label className="text-xs font-medium">
+                        {sf.name}
+                        {sf.required && <span className="ml-0.5 text-destructive">*</span>}
+                      </Label>
+                    </div>
+                    <FieldInput
+                      field={{ ...sf, type: sf.type as FieldType }}
+                      value={item[sf.name] ?? null}
+                      onChange={(v) => handleItemChange(index, sf.name, v)}
+                      allValues={item}
+                      disabled={disabled}
+                    />
+                  </div>
+                ))}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        ))}
+      </Accordion>
       <button
         type="button"
         onClick={handleAddItem}
         disabled={disabled}
-        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed py-2 text-xs text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed py-2 text-xs text-muted-foreground transition-colors hover:bg-accent/50"
       >
         <PlusIcon className="size-3.5" />
         Add item
@@ -1571,7 +1597,13 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
   }
 
   if (field.type === 'media-gallery') {
-    return <MediaGalleryInput value={value as string[] | null} onChange={onChange} disabled={Boolean(disabled)} />
+    return (
+      <MediaGalleryInput
+        value={value as string[] | null}
+        onChange={onChange}
+        disabled={Boolean(disabled)}
+      />
+    )
   }
 
   if (field.type === 'relation') {
@@ -1589,7 +1621,9 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
   }
 
   if (field.type === 'array') {
-    return <ArrayInput field={field} value={value} onChange={onChange} disabled={Boolean(disabled)} />
+    return (
+      <ArrayInput field={field} value={value} onChange={onChange} disabled={Boolean(disabled)} />
+    )
   }
 
   // string fallback
