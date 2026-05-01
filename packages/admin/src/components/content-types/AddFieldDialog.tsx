@@ -344,6 +344,7 @@ export function AddFieldDialog({
   const [nameError, setNameError] = useState('')
   const [subFieldDraft, setSubFieldDraft] = useState<ArraySubFieldDraft | null>(null)
   const [subFieldNameError, setSubFieldNameError] = useState('')
+  const [arrayFieldsError, setArrayFieldsError] = useState('')
 
   const isEditing = Boolean(initialField)
 
@@ -354,6 +355,7 @@ export function AddFieldDialog({
       setNameError('')
       setSubFieldDraft(null)
       setSubFieldNameError('')
+      setArrayFieldsError('')
     } else if (initialField) {
       const match = TYPE_OPTIONS.find(
         (o) =>
@@ -384,6 +386,7 @@ export function AddFieldDialog({
     setNameError('')
     setSubFieldDraft(null)
     setSubFieldNameError('')
+    setArrayFieldsError('')
   }
 
   function handleBack() {
@@ -393,6 +396,7 @@ export function AddFieldDialog({
       setNameError('')
       setSubFieldDraft(null)
       setSubFieldNameError('')
+      setArrayFieldsError('')
     }
   }
 
@@ -434,6 +438,36 @@ export function AddFieldDialog({
     setConfig((prev) => ({ ...prev, arrayFields: prev.arrayFields.filter((f) => f.name !== name) }))
   }
 
+  function handleRenameSubField(index: number, name: string) {
+    setConfig((prev) => ({
+      ...prev,
+      arrayFields: prev.arrayFields.map((f, i) => (i === index ? { ...f, name } : f)),
+    }))
+    setArrayFieldsError('')
+  }
+
+  function validateArraySubFields() {
+    const trimmedNames = config.arrayFields.map((f) => f.name.trim())
+    if (trimmedNames.some((name) => !name)) {
+      setArrayFieldsError('All sub-fields must have a name.')
+      return false
+    }
+    if (trimmedNames.some((name) => !/^[a-z][a-z0-9_]*$/.test(name))) {
+      setArrayFieldsError('Sub-field names must use lowercase letters, digits and underscores.')
+      return false
+    }
+    if (trimmedNames.some((name) => isReservedSqlIdentifier(name))) {
+      setArrayFieldsError('One or more sub-field names are reserved by SQL.')
+      return false
+    }
+    const unique = new Set(trimmedNames)
+    if (unique.size !== trimmedNames.length) {
+      setArrayFieldsError('Sub-field names must be unique.')
+      return false
+    }
+    return true
+  }
+
   function validate() {
     const trimmed = config.name.trim()
     if (!trimmed) {
@@ -457,6 +491,7 @@ export function AddFieldDialog({
 
   function handleConfirm() {
     if (!selected || !validate()) return
+    if (selected.type === 'array' && !validateArraySubFields()) return
     onConfirm({
       name: config.name.trim(),
       type: selected.type,
@@ -472,7 +507,10 @@ export function AddFieldDialog({
           : selected.type === 'media-gallery'
             ? ['image']
             : undefined,
-      arrayFields: selected.type === 'array' ? config.arrayFields : undefined,
+      arrayFields:
+        selected.type === 'array'
+          ? config.arrayFields.map((f) => ({ ...f, name: f.name.trim() }))
+          : undefined,
       width: initialField?.width ?? DEFAULT_FIELD_WIDTH[selected.type],
     })
     handleOpenChange(false)
@@ -610,24 +648,25 @@ export function AddFieldDialog({
 
                 {config.arrayFields.length > 0 && (
                   <div className="grid grid-cols-6 gap-1.5">
-                    {config.arrayFields.map((sf) => {
+                    {config.arrayFields.map((sf, index) => {
                       const opt = ARRAY_SUBFIELD_OPTIONS.find(
                         (o) => o.type === sf.type && (o.subtype ?? undefined) === (sf.subtype ?? undefined),
                       )
                       const SfIcon = opt?.icon ?? TypeIcon
                       return (
                         <div
-                          key={sf.name}
+                          key={`${sf.name}-${index}`}
                           className={`${FIELD_WIDTH_SPAN[sf.width ?? 'full']} flex items-center gap-1.5 rounded-md border border-dashed border-border p-2`}
                         >
                           <div className={`flex size-5 shrink-0 items-center justify-center rounded ${opt?.bg ?? 'bg-muted'}`}>
                             <SfIcon className={`size-3 ${opt?.color ?? 'text-muted-foreground'}`} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium">
-                              {sf.name}
-                              {sf.required && <span className="ml-0.5 text-destructive">*</span>}
-                            </p>
+                            <Input
+                              value={sf.name}
+                              onChange={(e) => handleRenameSubField(index, e.target.value)}
+                              className="h-6 px-1.5 text-xs"
+                            />
                             <p className="truncate text-[10px] text-muted-foreground">{opt?.label}</p>
                           </div>
                           <button
@@ -642,6 +681,7 @@ export function AddFieldDialog({
                     })}
                   </div>
                 )}
+                {arrayFieldsError && <p className="text-xs text-destructive">{arrayFieldsError}</p>}
 
                 {subFieldDraft && (
                   <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
@@ -691,35 +731,6 @@ export function AddFieldDialog({
                           onCheckedChange={(v) => setSubFieldDraft((prev) => prev ? { ...prev, required: Boolean(v) } : prev)}
                         />
                         <Label htmlFor="subfield-required" className="cursor-pointer font-normal text-sm">Required</Label>
-                      </div>
-                      <div className="flex items-center gap-px rounded-md border border-border p-0.5">
-                        {([
-                          { value: 'full' as FieldWidth, label: 'Full' },
-                          { value: 'two-thirds' as FieldWidth, label: '2/3' },
-                          { value: 'half' as FieldWidth, label: '1/2' },
-                          { value: 'third' as FieldWidth, label: '1/3' },
-                        ]).map(({ value, label: tooltip }) => {
-                          const bar = 'rounded-sm bg-current'
-                          return (
-                            <button
-                              key={value}
-                              type="button"
-                              title={tooltip}
-                              onClick={() => setSubFieldDraft((prev) => prev ? { ...prev, width: value } : prev)}
-                              className={[
-                                'flex items-center justify-center rounded px-1.5 py-1 transition-colors',
-                                subFieldDraft.width === value ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground',
-                              ].join(' ')}
-                            >
-                              <div className="flex w-4 gap-px">
-                                {value === 'full' && <div className={`${bar} h-2 w-full`} />}
-                                {value === 'two-thirds' && (<><div className={`${bar} h-2 flex-1`} /><div className={`${bar} h-2 flex-1`} /><div className="h-2 flex-1 rounded-sm bg-current opacity-25" /></>)}
-                                {value === 'half' && (<><div className={`${bar} h-2 flex-1`} /><div className={`${bar} h-2 flex-1`} /></>)}
-                                {value === 'third' && (<><div className={`${bar} h-2 flex-1`} /><div className={`${bar} h-2 flex-1`} /><div className={`${bar} h-2 flex-1`} /></>)}
-                              </div>
-                            </button>
-                          )
-                        })}
                       </div>
                       <div className="flex gap-1.5">
                         <Button variant="ghost" size="sm" onClick={() => { setSubFieldDraft(null); setSubFieldNameError('') }}>Cancel</Button>

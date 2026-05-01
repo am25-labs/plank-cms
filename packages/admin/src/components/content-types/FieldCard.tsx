@@ -159,22 +159,23 @@ function WidthIcon({ width }: { width: FieldWidth }) {
   return (
     <div className="flex w-4 gap-px">
       <div className={`${bar} h-2 flex-1`} />
-      <div className={`${bar} h-2 flex-1`} />
-      <div className={`${bar} h-2 flex-1`} />
+      <div className="h-2 flex-1 rounded-sm bg-current opacity-25" />
+      <div className="h-2 flex-1 rounded-sm bg-current opacity-25" />
     </div>
   )
 }
 
 const WIDTH_OPTIONS: { value: FieldWidth; label: string }[] = [
   { value: 'full', label: 'Full width' },
-  { value: 'two-thirds', label: '2/3' },
   { value: 'half', label: 'Half' },
   { value: 'third', label: '1/3' },
+  { value: 'two-thirds', label: '2/3' },
 ]
 
 type FieldCardProps = {
   field: FieldCardData
   onWidthChange?: (width: FieldWidth) => void
+  onArraySubFieldWidthChange?: (subFieldName: string, width: FieldWidth) => void
   onEdit?: () => void
   onDelete?: () => void
   dragListeners?: DraggableSyntheticListeners
@@ -184,6 +185,7 @@ type FieldCardProps = {
 export function FieldCard({
   field,
   onWidthChange,
+  onArraySubFieldWidthChange,
   onEdit,
   onDelete,
   dragListeners,
@@ -296,6 +298,26 @@ export function FieldCard({
                   </span>
                 </div>
                 <p className="mt-0.5 truncate pl-6 text-[10px] text-muted-foreground">{subMeta.label}</p>
+                {onArraySubFieldWidthChange && (
+                  <div className="mt-1 flex items-center gap-px rounded-md border border-border p-0.5">
+                    {WIDTH_OPTIONS.map(({ value, label: tooltip }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        title={tooltip}
+                        onClick={() => onArraySubFieldWidthChange(subField.name, value)}
+                        className={[
+                          'flex items-center justify-center rounded px-1.5 py-1 transition-colors',
+                          (subField.width ?? 'full') === value
+                            ? 'bg-foreground text-background'
+                            : 'text-muted-foreground hover:text-foreground',
+                        ].join(' ')}
+                      >
+                        <WidthIcon width={value} />
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}

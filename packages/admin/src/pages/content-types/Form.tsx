@@ -68,11 +68,13 @@ function toTableName(slug: string) {
 function SortableFieldCard({
   field,
   onWidthChange,
+  onArraySubFieldWidthChange,
   onEdit,
   onDelete,
 }: {
   field: FieldCardData
   onWidthChange: (w: FieldWidth) => void
+  onArraySubFieldWidthChange: (subFieldName: string, width: FieldWidth) => void
   onEdit: () => void
   onDelete: () => void
 }) {
@@ -95,6 +97,7 @@ function SortableFieldCard({
         dragListeners={listeners}
         dragAttributes={attributes}
         onWidthChange={onWidthChange}
+        onArraySubFieldWidthChange={onArraySubFieldWidthChange}
         onEdit={onEdit}
         onDelete={onDelete}
       />
@@ -212,6 +215,24 @@ export function ContentTypeForm() {
 
   function handleWidthChange(fieldName: string, width: FieldWidth) {
     setFields((prev) => prev.map((f) => (f.name === fieldName ? { ...f, width } : f)))
+  }
+
+  function handleArraySubFieldWidthChange(
+    fieldName: string,
+    subFieldName: string,
+    width: FieldWidth,
+  ) {
+    setFields((prev) =>
+      prev.map((field) => {
+        if (field.name !== fieldName || field.type !== 'array' || !field.arrayFields) return field
+        return {
+          ...field,
+          arrayFields: field.arrayFields.map((subField) =>
+            subField.name === subFieldName ? { ...subField, width } : subField,
+          ),
+        }
+      }),
+    )
   }
 
   async function handleSave() {
@@ -372,6 +393,9 @@ export function ContentTypeForm() {
                             key={field.name}
                             field={field}
                             onWidthChange={(w) => handleWidthChange(field.name, w)}
+                            onArraySubFieldWidthChange={(subFieldName, width) =>
+                              handleArraySubFieldWidthChange(field.name, subFieldName, width)
+                            }
                             onEdit={() => setEditingField(field)}
                             onDelete={() => handleDeleteField(field.name)}
                           />

@@ -46,6 +46,7 @@ import {
   ChevronsUpDownIcon,
   PlusIcon,
   Trash2Icon,
+  ChevronUpIcon,
 } from 'lucide-react'
 
 type FieldType =
@@ -1189,6 +1190,14 @@ function ArrayInput({
     onChange(items.filter((_, i) => i !== index))
   }
 
+  function handleMoveItem(index: number, dir: -1 | 1) {
+    const swap = index + dir
+    if (swap < 0 || swap >= items.length) return
+    const next = [...items]
+    ;[next[index], next[swap]] = [next[swap], next[index]]
+    onChange(next)
+  }
+
   function handleItemChange(index: number, subFieldName: string, subValue: unknown) {
     onChange(items.map((item, i) => (i === index ? { ...item, [subFieldName]: subValue } : item)))
   }
@@ -1207,14 +1216,34 @@ function ArrayInput({
         <div key={index} className="rounded-md border border-dashed p-3">
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-medium text-muted-foreground">Item {index + 1}</span>
-            <button
-              type="button"
-              onClick={() => handleRemoveItem(index)}
-              disabled={disabled}
-              className="flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2Icon className="size-3.5" />
-            </button>
+            <div className="flex items-center gap-0.5">
+              <Button
+                size="icon"
+                variant="ghost"
+                disabled={disabled || index === 0}
+                onClick={() => handleMoveItem(index, -1)}
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+              >
+                <ChevronUpIcon className="size-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                disabled={disabled || index === items.length - 1}
+                onClick={() => handleMoveItem(index, 1)}
+                className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+              >
+                <ChevronDownIcon className="size-3.5" />
+              </Button>
+              <button
+                type="button"
+                onClick={() => handleRemoveItem(index)}
+                disabled={disabled}
+                className="flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2Icon className="size-3.5" />
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-6 gap-3">
             {subFields.map((sf) => (
