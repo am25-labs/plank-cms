@@ -167,6 +167,14 @@ const TYPE_OPTIONS: TypeOption[] = [
     bg: 'bg-cyan-50',
   },
   {
+    type: 'navigation',
+    icon: ListIcon,
+    label: 'Navigation',
+    description: 'Nested navigation items with label, href and icon',
+    color: 'text-cyan-600',
+    bg: 'bg-cyan-50',
+  },
+  {
     type: 'number',
     subtype: 'integer',
     icon: HashIcon,

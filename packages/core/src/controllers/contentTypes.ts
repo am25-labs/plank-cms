@@ -113,7 +113,7 @@ const ArraySubFieldSchema = z.object({
 
 const FieldSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]*$/, 'Field name must be lowercase with underscores'),
-  type: z.enum(['string', 'text', 'richtext', 'number', 'boolean', 'datetime', 'media', 'media-gallery', 'relation', 'uid', 'array']),
+  type: z.enum(['string', 'text', 'richtext', 'number', 'boolean', 'datetime', 'media', 'media-gallery', 'relation', 'uid', 'array', 'navigation']),
   required: z.boolean().optional(),
   subtype: z.enum(['integer', 'float']).optional(),
   relationType: z.enum(['many-to-one', 'one-to-one', 'one-to-many', 'many-to-many']).optional(),

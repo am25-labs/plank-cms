@@ -67,6 +67,7 @@ type FieldType =
   | 'relation'
   | 'uid'
   | 'array'
+  | 'navigation'
 type RelationType = 'many-to-one' | 'one-to-one' | 'one-to-many' | 'many-to-many'
 type ArraySubFieldType =
   | 'string'
@@ -1305,6 +1306,216 @@ function ArrayInput({
   )
 }
 
+type NavigationItem = {
+  label: string
+  href: string
+  items?: NavigationItem[]
+}
+
+const MAX_NAVIGATION_DEPTH = 3
+const MAX_NAVIGATION_ITEMS_PER_LEVEL = 20
+
+function NavigationInput({
+  value,
+  onChange,
+  disabled = false,
+  depth = 0,
+}: {
+  value: unknown
+  onChange: (v: unknown) => void
+  disabled?: boolean
+  depth?: number
+}) {
+  const items = Array.isArray(value) ? (value as NavigationItem[]) : []
+  const level = depth + 1
+  const canNestMore = level < MAX_NAVIGATION_DEPTH
+  const canAddAtThisLevel = items.length < MAX_NAVIGATION_ITEMS_PER_LEVEL
+
+  function createItem(): NavigationItem {
+    return { label: '', href: '' }
+  }
+
+  function updateAtPath(path: number[], updater: (item: NavigationItem) => NavigationItem) {
+    const visit = (nodes: NavigationItem[], cursor: number): NavigationItem[] => {
+      const idx = path[cursor]
+      return nodes.map((node, i) => {
+        if (i !== idx) return node
+        if (cursor === path.length - 1) return updater(node)
+        const nextItems = Array.isArray(node.items) ? node.items : []
+        return { ...node, items: visit(nextItems, cursor + 1) }
+      })
+    }
+    onChange(visit(items, 0))
+  }
+
+  function moveAtPath(path: number[], dir: -1 | 1) {
+    const visit = (nodes: NavigationItem[], cursor: number): NavigationItem[] => {
+      if (cursor === path.length - 1) {
+        const idx = path[cursor]
+        const swap = idx + dir
+        if (swap < 0 || swap >= nodes.length) return nodes
+        const next = [...nodes]
+        ;[next[idx], next[swap]] = [next[swap], next[idx]]
+        return next
+      }
+      const idx = path[cursor]
+      return nodes.map((node, i) => {
+        if (i !== idx) return node
+        const nextItems = Array.isArray(node.items) ? node.items : []
+        return { ...node, items: visit(nextItems, cursor + 1) }
+      })
+    }
+    onChange(visit(items, 0))
+  }
+
+  function removeAtPath(path: number[]) {
+    const visit = (nodes: NavigationItem[], cursor: number): NavigationItem[] => {
+      const idx = path[cursor]
+      if (cursor === path.length - 1) return nodes.filter((_, i) => i !== idx)
+      return nodes.map((node, i) => {
+        if (i !== idx) return node
+        const nextItems = Array.isArray(node.items) ? node.items : []
+        return { ...node, items: visit(nextItems, cursor + 1) }
+      })
+    }
+    onChange(visit(items, 0))
+  }
+
+  function addRootItem() {
+    if (!canAddAtThisLevel) return
+    onChange([...items, createItem()])
+  }
+
+  if (items.length === 0) {
+    return (
+      <button
+        type="button"
+        onClick={addRootItem}
+        disabled={disabled || !canAddAtThisLevel}
+        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed py-2 text-xs text-muted-foreground transition-colors hover:bg-accent/20"
+      >
+        <PlusIcon className="size-3.5" />
+        Add item
+      </button>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Accordion type="single" collapsible className="w-full">
+        {items.map((item, index) => {
+          const path = [index]
+          const itemLabel = item.label?.trim() ? item.label : `Item ${index + 1}`
+          return (
+            <AccordionItem
+              key={index}
+              value={`navigation-item-${depth}-${index}`}
+              className="mb-2 rounded-md border border-dashed last:border-b transition-colors hover:bg-accent/50"
+            >
+              <div className="relative data-[state=open]:border-b data-[state=open]:border-border/50">
+                <AccordionTrigger className="w-full py-2 pl-3 pr-24 text-muted-foreground [&>svg]:hidden">
+                  {itemLabel}
+                </AccordionTrigger>
+                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={disabled || index === 0}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => moveAtPath(path, -1)}
+                    className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                  >
+                    <ChevronUpIcon className="size-3.5" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={disabled || index === items.length - 1}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => moveAtPath(path, 1)}
+                    className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                  >
+                    <ChevronDownIcon className="size-3.5" />
+                  </Button>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => removeAtPath(path)}
+                    disabled={disabled}
+                    className="flex size-6 items-center justify-center rounded text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <Trash2Icon className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+              <AccordionContent className="px-3 pt-3">
+                <div className="grid grid-cols-6 gap-3">
+                  <div className="col-span-3">
+                    <Label className="mb-1 block text-xs font-medium">label</Label>
+                    <Input
+                      className="text-base"
+                      value={item.label ?? ''}
+                      onChange={(e) => updateAtPath(path, (n) => ({ ...n, label: e.target.value }))}
+                      disabled={disabled}
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Label className="mb-1 block text-xs font-medium">href</Label>
+                    <Input
+                      className="text-base"
+                      value={item.href ?? ''}
+                      onChange={(e) => updateAtPath(path, (n) => ({ ...n, href: e.target.value }))}
+                      disabled={disabled}
+                    />
+                  </div>
+                </div>
+
+                {canNestMore ? (
+                  <div className="mt-3 border-l border-border pl-3">
+                    <p className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Child items
+                    </p>
+                    <NavigationInput
+                      value={item.items ?? []}
+                      onChange={(v) =>
+                        updateAtPath(path, (n) => ({
+                          ...n,
+                          items:
+                            Array.isArray(v) && v.length > 0 ? (v as NavigationItem[]) : undefined,
+                        }))
+                      }
+                      disabled={disabled}
+                      depth={depth + 1}
+                    />
+                  </div>
+                ) : (
+                  <p className="mt-3 text-[11px] text-muted-foreground">
+                    Maximum depth reached ({MAX_NAVIGATION_DEPTH} levels).
+                  </p>
+                )}
+              </AccordionContent>
+            </AccordionItem>
+          )
+        })}
+      </Accordion>
+      <button
+        type="button"
+        onClick={addRootItem}
+        disabled={disabled}
+        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed py-2 text-xs text-muted-foreground transition-colors hover:bg-accent/50"
+      >
+        <PlusIcon className="size-3.5" />
+        Add item
+      </button>
+      {!canAddAtThisLevel && (
+        <p className="text-[11px] text-muted-foreground">
+          Maximum {MAX_NAVIGATION_ITEMS_PER_LEVEL} items allowed per level.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function toSlug(value: string): string {
   return value
     .toLowerCase()
@@ -1624,6 +1835,10 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
     return (
       <ArrayInput field={field} value={value} onChange={onChange} disabled={Boolean(disabled)} />
     )
+  }
+
+  if (field.type === 'navigation') {
+    return <NavigationInput value={value} onChange={onChange} disabled={Boolean(disabled)} />
   }
 
   // string fallback

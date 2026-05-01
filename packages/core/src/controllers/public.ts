@@ -18,6 +18,31 @@ type Row = Record<string, unknown> & {
   _author_country?: string | null
 }
 
+function normalizeNavigationItems(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null) return item
+    const raw = item as Record<string, unknown>
+    const normalized: Record<string, unknown> = {
+      label: raw.label,
+      href: raw.href,
+    }
+    if (Array.isArray(raw.items)) {
+      const normalizedChildren = normalizeNavigationItems(raw.items)
+      if (Array.isArray(normalizedChildren) && normalizedChildren.length > 0) {
+        normalized.items = normalizedChildren
+      }
+    } else if (raw.items !== undefined) {
+      normalized.items = raw.items
+    }
+    for (const [key, val] of Object.entries(raw)) {
+      if (key === 'label' || key === 'href' || key === 'items') continue
+      normalized[key] = val
+    }
+    return normalized
+  })
+}
+
 // Resolves media IDs to fresh URLs in-place across a list of serialized entries
 async function resolveMediaFields(
   entries: Record<string, unknown>[],
@@ -219,7 +244,11 @@ function serializeEntry(
 
   const out: Record<string, unknown> = { id: row.id }
   for (const field of ct.fields) {
-    if (field.name in effective) out[field.name] = effective[field.name]
+    if (!(field.name in effective)) continue
+    out[field.name] =
+      field.type === 'navigation'
+        ? normalizeNavigationItems(effective[field.name])
+        : effective[field.name]
   }
   out.status = row.status
   out.published_at = row.published_at ?? null

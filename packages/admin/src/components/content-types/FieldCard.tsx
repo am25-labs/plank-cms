@@ -29,6 +29,7 @@ type FieldType =
   | 'relation'
   | 'uid'
   | 'array'
+  | 'navigation'
 type NumberSubtype = 'integer' | 'float'
 export type FieldWidth = 'full' | 'two-thirds' | 'half' | 'third'
 export type MediaAllowedType = 'image' | 'video' | 'audio' | 'document'
@@ -109,6 +110,8 @@ function getFieldMeta(type: FieldType, subtype?: NumberSubtype): FieldMeta {
       return { icon: FingerprintIcon, label: 'UID', color: 'text-teal-600', bg: 'bg-teal-50' }
     case 'array':
       return { icon: ListIcon, label: 'Array', color: 'text-cyan-600', bg: 'bg-cyan-50' }
+    case 'navigation':
+      return { icon: ListIcon, label: 'Navigation', color: 'text-cyan-600', bg: 'bg-cyan-50' }
   }
 }
 
@@ -131,6 +134,7 @@ export const DEFAULT_FIELD_WIDTH: Record<FieldType, FieldWidth> = {
   relation: 'half',
   uid: 'half',
   array: 'full',
+  navigation: 'full',
 }
 
 function WidthIcon({ width }: { width: FieldWidth }) {

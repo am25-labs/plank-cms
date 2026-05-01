@@ -10,6 +10,7 @@ export type FieldType =
   | 'relation'
   | 'uid'
   | 'array'
+  | 'navigation'
 
 export type ArraySubFieldType =
   | 'string'

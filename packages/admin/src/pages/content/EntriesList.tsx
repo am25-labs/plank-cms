@@ -74,8 +74,11 @@ type FieldType =
   | 'boolean'
   | 'datetime'
   | 'media'
+  | 'media-gallery'
   | 'relation'
   | 'uid'
+  | 'array'
+  | 'navigation'
 
 type RelationType = 'many-to-one' | 'one-to-one' | 'one-to-many' | 'many-to-many'
 

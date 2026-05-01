@@ -1,5 +1,51 @@
 import { type ContentType, ValidationError } from './types.js'
 
+const MAX_NAVIGATION_DEPTH = 3
+const MAX_NAVIGATION_ITEMS_PER_LEVEL = 20
+
+function validateNavigationItems(
+  value: unknown,
+  fieldName: string,
+  errors: string[],
+  path = fieldName,
+  depth = 1,
+): void {
+  if (!Array.isArray(value)) {
+    errors.push(`Field "${path}" must be an array`)
+    return
+  }
+
+  if (depth > MAX_NAVIGATION_DEPTH) {
+    errors.push(`Field "${path}" exceeds max navigation depth (${MAX_NAVIGATION_DEPTH})`)
+    return
+  }
+
+  if (value.length > MAX_NAVIGATION_ITEMS_PER_LEVEL) {
+    errors.push(
+      `Field "${path}" cannot have more than ${MAX_NAVIGATION_ITEMS_PER_LEVEL} items per level`,
+    )
+  }
+
+  for (let i = 0; i < value.length; i++) {
+    const item = value[i] as Record<string, unknown>
+    const itemPath = `${path}[${i}]`
+    if (typeof item !== 'object' || item === null) {
+      errors.push(`Field "${itemPath}" must be an object`)
+      continue
+    }
+
+    if (typeof item.label !== 'string' || !item.label.trim()) {
+      errors.push(`Field "${itemPath}.label" must be a non-empty string`)
+    }
+    if (typeof item.href !== 'string' || !item.href.trim()) {
+      errors.push(`Field "${itemPath}.href" must be a non-empty string`)
+    }
+    if (item.items !== undefined) {
+      validateNavigationItems(item.items, fieldName, errors, `${itemPath}.items`, depth + 1)
+    }
+  }
+}
+
 export function validate(
   contentType: ContentType,
   payload: Record<string, unknown>,
@@ -91,6 +137,13 @@ export function validate(
             }
           }
         }
+        break
+      case 'navigation':
+        if (field.required && Array.isArray(value) && value.length === 0) {
+          errors.push(`Field "${field.name}" is required`)
+          break
+        }
+        validateNavigationItems(value, field.name, errors)
         break
     }
   }

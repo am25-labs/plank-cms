@@ -44,6 +44,43 @@ function junctionTableName(sourceTable: string, fieldName: string): string {
   return `_rel_${sourceTable}_${fieldName}`
 }
 
+function normalizeNavigationItems(value: unknown): unknown {
+  if (!Array.isArray(value)) return value
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null) return item
+    const raw = item as Record<string, unknown>
+    const normalized: Record<string, unknown> = {
+      label: raw.label,
+      href: raw.href,
+    }
+    if (Array.isArray(raw.items)) {
+      const normalizedChildren = normalizeNavigationItems(raw.items)
+      if (Array.isArray(normalizedChildren) && normalizedChildren.length > 0) {
+        normalized.items = normalizedChildren
+      }
+    } else if (raw.items !== undefined) {
+      normalized.items = raw.items
+    }
+    for (const [key, val] of Object.entries(raw)) {
+      if (key === 'label' || key === 'href' || key === 'items') continue
+      normalized[key] = val
+    }
+    return normalized
+  })
+}
+
+function normalizeNavigationFields(
+  row: Record<string, unknown>,
+  fields: import('@plank-cms/schema').FieldDefinition[],
+): Record<string, unknown> {
+  const out = { ...row }
+  for (const field of fields) {
+    if (field.type !== 'navigation') continue
+    out[field.name] = normalizeNavigationItems(out[field.name])
+  }
+  return out
+}
+
 async function syncManyToMany(
   entryId: string,
   tableName: string,
@@ -136,7 +173,7 @@ export const listEntries: SlugParam = async (req, res) => {
       if (key && !key.startsWith('http')) {
         resolved._author_avatar_url = await provider.getUrl(key)
       }
-      return { ...resolved, ...mmIds }
+      return normalizeNavigationFields({ ...resolved, ...mmIds }, ct.fields)
     }),
   )
 
@@ -205,7 +242,7 @@ export const getEntry: SlugIdParam = async (req, res) => {
   const resolved = resolveLocalizedRow(rows[0], ct, locale, fallbacks)
   const key = resolved._author_avatar_url as string | null
   if (key && !key.startsWith('http')) resolved._author_avatar_url = await provider.getUrl(key)
-  res.json({ ...resolved, ...mmIds })
+  res.json(normalizeNavigationFields({ ...resolved, ...mmIds }, ct.fields))
 }
 
 export const createEntry: SlugParam = async (req, res) => {
@@ -242,6 +279,7 @@ export const createEntry: SlugParam = async (req, res) => {
       const setClauses = fields
         .map((f, i) =>
           f.type === 'media-gallery' || f.type === 'array'
+            || f.type === 'navigation'
             ? `${quoteIdentifier(f.name)} = $${i + 1}::jsonb`
             : `${quoteIdentifier(f.name)} = $${i + 1}`,
         )
@@ -256,7 +294,10 @@ export const createEntry: SlugParam = async (req, res) => {
       const values = [
         ...fields.map((f) => {
           const v = req.body[f.name]
-          return f.type === 'media-gallery' || f.type === 'array' ? JSON.stringify(v) : v
+          const normalized = f.type === 'navigation' ? normalizeNavigationItems(v) : v
+          return f.type === 'media-gallery' || f.type === 'array' || f.type === 'navigation'
+            ? JSON.stringify(normalized)
+            : v
         }),
         ...extraValues,
         existing[0].id,
@@ -273,7 +314,7 @@ export const createEntry: SlugParam = async (req, res) => {
           return syncManyToMany(existing[0].id, ct.tableName, f, ids)
         }),
       )
-      res.json(rows[0])
+      res.json(normalizeNavigationFields(rows[0], ct.fields))
       return
     }
   }
@@ -295,7 +336,9 @@ export const createEntry: SlugParam = async (req, res) => {
     '$1',
     '$2',
     ...fields.map((f, i) =>
-      f.type === 'media-gallery' || f.type === 'array' ? `$${i + 3}::jsonb` : `$${i + 3}`,
+      f.type === 'media-gallery' || f.type === 'array' || f.type === 'navigation'
+        ? `$${i + 3}::jsonb`
+        : `$${i + 3}`,
     ),
     ...extraPlaceholders,
   ].join(', ')
@@ -304,7 +347,10 @@ export const createEntry: SlugParam = async (req, res) => {
     userId,
     ...fields.map((f) => {
       const v = req.body[f.name]
-      return f.type === 'media-gallery' || f.type === 'array' ? JSON.stringify(v) : v
+      const normalized = f.type === 'navigation' ? normalizeNavigationItems(v) : v
+      return f.type === 'media-gallery' || f.type === 'array' || f.type === 'navigation'
+        ? JSON.stringify(normalized)
+        : v
     }),
     ...extraValues,
   ]
@@ -319,7 +365,7 @@ export const createEntry: SlugParam = async (req, res) => {
       return syncManyToMany(id, ct.tableName, f, ids)
     }),
   )
-  res.status(201).json(rows[0])
+  res.status(201).json(normalizeNavigationFields(rows[0], ct.fields))
   triggerWebhooks('entry.created', { content_type: req.params.slug, entry_id: rows[0].id })
 }
 
@@ -349,7 +395,7 @@ export const getSingleEntry: SlugParam = async (req, res) => {
   const resolved = resolveLocalizedRow(rows[0], ct, locale, fallbacks)
   const key = resolved._author_avatar_url as string | null
   if (key && !key.startsWith('http')) resolved._author_avatar_url = await provider.getUrl(key)
-  res.json({ ...resolved, ...mmIds })
+  res.json(normalizeNavigationFields({ ...resolved, ...mmIds }, ct.fields))
 }
 
 export const updateEntry: SlugIdParam = async (req, res) => {
@@ -396,6 +442,7 @@ export const updateEntry: SlugIdParam = async (req, res) => {
   const setClauses = fields
     .map((f, i) =>
       f.type === 'media-gallery' || f.type === 'array'
+        || f.type === 'navigation'
         ? `${quoteIdentifier(f.name)} = $${i + 1}::jsonb`
         : `${quoteIdentifier(f.name)} = $${i + 1}`,
     )
@@ -410,7 +457,10 @@ export const updateEntry: SlugIdParam = async (req, res) => {
   const values = [
     ...fields.map((f) => {
       const v = req.body[f.name]
-      return f.type === 'media-gallery' || f.type === 'array' ? JSON.stringify(v) : v
+      const normalized = f.type === 'navigation' ? normalizeNavigationItems(v) : v
+      return f.type === 'media-gallery' || f.type === 'array' || f.type === 'navigation'
+        ? JSON.stringify(normalized)
+        : v
     }),
     ...extraValues,
     req.params.id,
@@ -436,7 +486,7 @@ export const updateEntry: SlugIdParam = async (req, res) => {
     }),
   )
 
-  res.json(rows[0])
+  res.json(normalizeNavigationFields(rows[0], ct.fields))
   triggerWebhooks('entry.updated', { content_type: req.params.slug, entry_id: req.params.id })
 }
 
@@ -547,7 +597,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
     res.status(404).json({ error: 'Entry not found' })
     return
   }
-  res.json(rows[0])
+  res.json(normalizeNavigationFields(rows[0], ct.fields))
 
   const webhookEvent =
     status === 'published' ? 'entry.published' : status === 'draft' ? 'entry.unpublished' : null

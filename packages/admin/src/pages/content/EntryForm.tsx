@@ -43,6 +43,22 @@ type Entry = Record<string, unknown> & {
   scheduled_for?: string | null
 }
 
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => [k, stableValue(v)]),
+    )
+  }
+  return value
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(stableValue(value))
+}
+
 export function EntryForm() {
   const { slug, id } = useParams<{ slug: string; id: string }>()
   const navigate = useNavigate()
@@ -96,7 +112,7 @@ export function EntryForm() {
       setStatus('draft')
       setScheduledFor('')
       setIsPublishedStale(false)
-      original.current = JSON.stringify(empty)
+      original.current = stableStringify(empty)
       return
     }
     if (!existing || !ct) return
@@ -126,7 +142,7 @@ export function EntryForm() {
     setLocalizationEnabled(Boolean(enabled))
     setValues(initial)
     setStatus(existing.status ?? 'draft')
-    original.current = JSON.stringify(initial)
+    original.current = stableStringify(initial)
 
     if (existing.scheduled_for) {
       setScheduledFor(existing.scheduled_for)
@@ -158,13 +174,13 @@ export function EntryForm() {
         )
         normalizedInitial[f.name] = normalize(initial[f.name], f.type)
       })
-      setIsPublishedStale(JSON.stringify(normalizedInitial) !== JSON.stringify(snap))
+      setIsPublishedStale(stableStringify(normalizedInitial) !== stableStringify(snap))
     } else {
       setIsPublishedStale(false)
     }
   }, [existing, ct, isNew])
 
-  const isDirty = JSON.stringify(values) !== original.current
+  const isDirty = stableStringify(values) !== original.current
 
   const blocker = useBlocker(
     useCallback(() => {
@@ -286,7 +302,7 @@ export function EntryForm() {
         isNew ? 'POST' : 'PUT',
         body,
       )
-      original.current = JSON.stringify(values)
+      original.current = stableStringify(values)
       return saved
     } catch {
       return null
