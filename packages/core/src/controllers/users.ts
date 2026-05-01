@@ -1,8 +1,11 @@
 import type { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { pool, createId } from '@plank-cms/db'
+import { generateSecret, generateURI, verifySync } from 'otplib'
+import QRCode from 'qrcode'
 import { z, flattenError } from 'zod'
 import { getProvider } from '../media/index.js'
+import { decrypt, encrypt } from '../lib/encrypt.js'
 
 const CreateUserSchema = z.object({
   email: z.email(),
@@ -30,7 +33,11 @@ const UpdateMeSchema = z.object({
   country: z.string().max(100).optional(),
 })
 
-type UserRow = { id: string; email: string; role_id: string; role_name?: string; first_name: string | null; last_name: string | null; avatar_url: string | null; job_title: string | null; organization: string | null; country: string | null; created_at: Date }
+const TwoFactorCodeSchema = z.object({
+  code: z.string().trim().length(6),
+})
+
+type UserRow = { id: string; email: string; role_id: string; role_name?: string; first_name: string | null; last_name: string | null; avatar_url: string | null; job_title: string | null; organization: string | null; country: string | null; two_factor_enabled: boolean; two_factor_secret: string | null; two_factor_temp_secret: string | null; created_at: Date }
 
 async function resolveAvatarUrl(row: UserRow): Promise<UserRow> {
   if (!row.avatar_url || row.avatar_url.startsWith('http')) return row
@@ -59,7 +66,7 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
 export async function getMe(req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query<UserRow & { permissions: string[] }>(
     `SELECT u.id, u.email, u.role_id, u.first_name, u.last_name, u.avatar_url,
-            u.job_title, u.organization, u.country, u.created_at,
+            u.job_title, u.organization, u.country, u.two_factor_enabled, u.created_at,
             r.permissions
      FROM plank_users u
      JOIN plank_roles r ON r.id = u.role_id
@@ -68,7 +75,121 @@ export async function getMe(req: Request, res: Response): Promise<void> {
   )
   if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
   const resolved = await resolveAvatarUrl(rows[0])
-  res.json({ ...resolved, permissions: rows[0].permissions })
+  res.json({ ...resolved, permissions: rows[0].permissions, two_factor_enabled: rows[0].two_factor_enabled })
+}
+
+export async function getTwoFactorStatus(req: Request, res: Response): Promise<void> {
+  const { rows } = await pool.query<{ two_factor_enabled: boolean }>(
+    'SELECT two_factor_enabled FROM plank_users WHERE id = $1',
+    [req.user!.id],
+  )
+  if (!rows[0]) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  res.json({ enabled: rows[0].two_factor_enabled })
+}
+
+export async function startTwoFactorSetup(req: Request, res: Response): Promise<void> {
+  const { rows } = await pool.query<{ email: string; two_factor_enabled: boolean }>(
+    'SELECT email, two_factor_enabled FROM plank_users WHERE id = $1',
+    [req.user!.id],
+  )
+  if (!rows[0]) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  if (rows[0].two_factor_enabled) {
+    res.status(400).json({ error: '2FA is already enabled' })
+    return
+  }
+
+  const secret = generateSecret()
+  await pool.query('UPDATE plank_users SET two_factor_temp_secret = $1 WHERE id = $2', [
+    encrypt(secret),
+    req.user!.id,
+  ])
+
+  const issuer = process.env.PLANK_2FA_ISSUER || 'Plank CMS'
+  const otpauthUri = generateURI({ issuer, label: rows[0].email, secret })
+  const qrCodeDataUrl = await QRCode.toDataURL(otpauthUri)
+  res.json({ otpauthUri, qrCodeDataUrl, secret })
+}
+
+export async function verifyTwoFactorSetup(req: Request, res: Response): Promise<void> {
+  const parsed = TwoFactorCodeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
+    return
+  }
+
+  const { rows } = await pool.query<{ two_factor_temp_secret: string | null }>(
+    'SELECT two_factor_temp_secret FROM plank_users WHERE id = $1',
+    [req.user!.id],
+  )
+  const tempSecret = rows[0]?.two_factor_temp_secret
+  if (!tempSecret) {
+    res.status(400).json({ error: 'No pending 2FA setup found' })
+    return
+  }
+
+  const result = verifySync({ token: parsed.data.code, secret: decrypt(tempSecret) })
+  if (!result.valid) {
+    res.status(401).json({ error: 'Invalid verification code' })
+    return
+  }
+
+  await pool.query(
+    `UPDATE plank_users
+     SET two_factor_enabled = TRUE,
+         two_factor_secret = two_factor_temp_secret,
+         two_factor_temp_secret = NULL
+     WHERE id = $1`,
+    [req.user!.id],
+  )
+
+  res.status(204).end()
+}
+
+export async function disableTwoFactor(req: Request, res: Response): Promise<void> {
+  const parsed = TwoFactorCodeSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
+    return
+  }
+
+  const { rows } = await pool.query<{ two_factor_enabled: boolean; two_factor_secret: string | null }>(
+    'SELECT two_factor_enabled, two_factor_secret FROM plank_users WHERE id = $1',
+    [req.user!.id],
+  )
+  const user = rows[0]
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  if (!user.two_factor_enabled || !user.two_factor_secret) {
+    res.status(400).json({ error: '2FA is not enabled' })
+    return
+  }
+
+  const result = verifySync({
+    token: parsed.data.code,
+    secret: decrypt(user.two_factor_secret),
+  })
+  if (!result.valid) {
+    res.status(401).json({ error: 'Invalid verification code' })
+    return
+  }
+
+  await pool.query(
+    `UPDATE plank_users
+     SET two_factor_enabled = FALSE,
+         two_factor_secret = NULL,
+         two_factor_temp_secret = NULL
+     WHERE id = $1`,
+    [req.user!.id],
+  )
+  res.status(204).end()
 }
 
 export async function updateMe(req: Request, res: Response): Promise<void> {

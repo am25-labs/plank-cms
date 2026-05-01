@@ -2,12 +2,19 @@ import type { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { pool, createId } from '@plank-cms/db'
+import { verifySync } from 'otplib'
 import { z, flattenError } from 'zod'
 import { getProvider } from '../media/index.js'
+import { decrypt } from '../lib/encrypt.js'
 
 const LoginSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
+})
+
+const Login2FASchema = z.object({
+  challengeToken: z.string().min(1),
+  code: z.string().trim().length(6),
 })
 
 const RegisterSchema = z.object({
@@ -26,6 +33,8 @@ type UserRow = {
   job_title: string | null
   organization: string | null
   country: string | null
+  two_factor_enabled: boolean
+  two_factor_secret: string | null
 }
 type CountRow = { count: string }
 type RoleRow = { id: string; name: string; permissions: string[] }
@@ -69,7 +78,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const { email, password } = parsed.data
   const { rows } = await pool.query<UserRow>(
-    `SELECT id, email, password, role_id, first_name, last_name, avatar_url, job_title, organization, country
+    `SELECT id, email, password, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret
      FROM plank_users
      WHERE email = $1`,
     [email],
@@ -94,13 +103,22 @@ export async function login(req: Request, res: Response): Promise<void> {
     avatarUrl = await provider.getUrl(avatarUrl)
   }
 
-  const token = jwt.sign(
-    { sub: user.id, roleId: user.role_id },
-    process.env.PLANK_JWT_SECRET!,
-    { expiresIn: '7d' },
-  )
+  if (user.two_factor_enabled && user.two_factor_secret) {
+    const challengeToken = jwt.sign(
+      { sub: user.id, roleId: user.role_id, twoFactor: true },
+      process.env.PLANK_JWT_SECRET!,
+      { expiresIn: '5m' },
+    )
+    res.json({ requiresTwoFactor: true, challengeToken })
+    return
+  }
+
+  const token = jwt.sign({ sub: user.id, roleId: user.role_id }, process.env.PLANK_JWT_SECRET!, {
+    expiresIn: '7d',
+  })
 
   res.json({
+    requiresTwoFactor: false,
     token,
     user: {
       id: user.id,
@@ -113,6 +131,85 @@ export async function login(req: Request, res: Response): Promise<void> {
       jobTitle: user.job_title,
       organization: user.organization,
       country: user.country,
+      twoFactorEnabled: user.two_factor_enabled,
+    },
+  })
+}
+
+export async function loginWithTwoFactor(req: Request, res: Response): Promise<void> {
+  const parsed = Login2FASchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
+    return
+  }
+
+  let payload: { sub: string; roleId: string; twoFactor?: boolean }
+  try {
+    payload = jwt.verify(parsed.data.challengeToken, process.env.PLANK_JWT_SECRET!) as {
+      sub: string
+      roleId: string
+      twoFactor?: boolean
+    }
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired 2FA challenge' })
+    return
+  }
+
+  if (!payload.twoFactor) {
+    res.status(400).json({ error: 'Invalid 2FA challenge token' })
+    return
+  }
+
+  const { rows } = await pool.query<UserRow>(
+    `SELECT id, email, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, password
+     FROM plank_users WHERE id = $1`,
+    [payload.sub],
+  )
+  const user = rows[0]
+  if (!user || !user.two_factor_enabled || !user.two_factor_secret) {
+    res.status(401).json({ error: '2FA is not enabled for this account' })
+    return
+  }
+
+  const result = verifySync({
+    token: parsed.data.code,
+    secret: decrypt(user.two_factor_secret),
+  })
+  if (!result.valid) {
+    res.status(401).json({ error: 'Invalid verification code' })
+    return
+  }
+
+  const { rows: roleRows } = await pool.query<RoleRow>(
+    'SELECT id, name, permissions FROM plank_roles WHERE id = $1',
+    [user.role_id],
+  )
+
+  let avatarUrl = user.avatar_url
+  if (avatarUrl && !avatarUrl.startsWith('http')) {
+    const provider = await getProvider()
+    avatarUrl = await provider.getUrl(avatarUrl)
+  }
+
+  const token = jwt.sign({ sub: user.id, roleId: user.role_id }, process.env.PLANK_JWT_SECRET!, {
+    expiresIn: '7d',
+  })
+
+  res.json({
+    requiresTwoFactor: false,
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      role: roleRows[0]?.name ?? 'unknown',
+      permissions: roleRows[0]?.permissions ?? [],
+      firstName: user.first_name,
+      lastName: user.last_name,
+      avatarUrl,
+      jobTitle: user.job_title,
+      organization: user.organization,
+      country: user.country,
+      twoFactorEnabled: user.two_factor_enabled,
     },
   })
 }

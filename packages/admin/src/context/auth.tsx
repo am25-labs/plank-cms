@@ -11,6 +11,7 @@ interface User {
   jobTitle: string | null
   organization: string | null
   country: string | null
+  twoFactorEnabled: boolean
 }
 
 interface AuthState {
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             job_title?: string | null
             organization?: string | null
             country?: string | null
+            two_factor_enabled?: boolean
           } | null) => {
             if (!data) return
             const patch: Partial<User> = {
@@ -79,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               jobTitle: data.job_title ?? null,
               organization: data.organization ?? null,
               country: data.country ?? null,
+              twoFactorEnabled: data.two_factor_enabled ?? false,
             }
             dispatch({ type: 'UPDATE_USER', payload: patch })
             const stored = localStorage.getItem(USER_KEY)

@@ -18,7 +18,7 @@ import {
   deleteEntry,
   patchEntryStatus,
 } from '../controllers/entries.js'
-import { listUsers, createUser, updateUser, deleteUser, getMe, updateMe, changePassword, uploadAvatar, deleteAvatar, presignAvatar, confirmAvatar } from '../controllers/users.js'
+import { listUsers, createUser, updateUser, deleteUser, getMe, updateMe, changePassword, uploadAvatar, deleteAvatar, presignAvatar, confirmAvatar, getTwoFactorStatus, startTwoFactorSetup, verifyTwoFactorSetup, disableTwoFactor } from '../controllers/users.js'
 import { getUserPref, setUserPref } from '../controllers/userPrefs.js'
 import { listRoles, updateRole, resetRoles } from '../controllers/roles.js'
 import { listApiTokens, createApiToken, deleteApiToken } from '../controllers/apiTokens.js'
@@ -59,6 +59,10 @@ router.post('/users/me/avatar/confirm', confirmAvatar)
 router.delete('/users/me/avatar', deleteAvatar)
 router.get('/users/me/prefs/:key', getUserPref)
 router.put('/users/me/prefs/:key', setUserPref)
+router.get('/users/me/2fa', getTwoFactorStatus)
+router.post('/users/me/2fa/setup', startTwoFactorSetup)
+router.post('/users/me/2fa/verify', verifyTwoFactorSetup)
+router.post('/users/me/2fa/disable', disableTwoFactor)
 
 // Roles
 router.get('/roles', authorize('settings:users:read'), listRoles)

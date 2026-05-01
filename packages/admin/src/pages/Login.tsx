@@ -5,10 +5,13 @@ import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
 import { Input } from '@/components/ui/input.tsx'
 import { Label } from '@/components/ui/label.tsx'
+import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp.tsx'
 
 interface AuthResponse {
-  token: string
-  user: {
+  requiresTwoFactor: boolean
+  challengeToken?: string
+  token?: string
+  user?: {
     id: string
     email: string
     role: string
@@ -19,6 +22,7 @@ interface AuthResponse {
     jobTitle?: string | null
     organization?: string | null
     country?: string | null
+    twoFactorEnabled?: boolean
   }
 }
 
@@ -32,6 +36,8 @@ export function Login() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [challengeToken, setChallengeToken] = useState<string | null>(null)
+  const [otpCode, setOtpCode] = useState('')
 
   useEffect(() => {
     fetch('/cms/auth/setup')
@@ -50,24 +56,48 @@ export function Login() {
     }
 
     try {
+      if (challengeToken) {
+        const verifyRes = await request('/cms/auth/login/2fa', 'POST', {
+          challengeToken,
+          code: otpCode,
+        })
+        if (!verifyRes.token || !verifyRes.user) throw new Error('Invalid 2FA response')
+        login(
+          {
+            ...verifyRes.user,
+            jobTitle: verifyRes.user.jobTitle ?? null,
+            organization: verifyRes.user.organization ?? null,
+            country: verifyRes.user.country ?? null,
+            twoFactorEnabled: verifyRes.user.twoFactorEnabled ?? false,
+          },
+          verifyRes.token,
+        )
+        navigate('/')
+        return
+      }
+
       if (needsSetup) {
         await request('/cms/auth/register', 'POST', { email, password })
       }
       const res = await request('/cms/auth/login', 'POST', { email, password })
+      if (res.requiresTwoFactor && res.challengeToken) {
+        setChallengeToken(res.challengeToken)
+        return
+      }
+      if (!res.token || !res.user) throw new Error('Invalid login response')
       login(
         {
           ...res.user,
           jobTitle: res.user.jobTitle ?? null,
           organization: res.user.organization ?? null,
           country: res.user.country ?? null,
+          twoFactorEnabled: res.user.twoFactorEnabled ?? false,
         },
         res.token,
       )
       navigate('/')
     } catch {
-      setValidationError(
-        needsSetup ? (error ?? 'Could not create account.') : 'Invalid email or password.',
-      )
+      setValidationError(challengeToken ? 'Invalid verification code.' : needsSetup ? (error ?? 'Could not create account.') : 'Invalid email or password.')
     }
   }
 
@@ -124,6 +154,22 @@ export function Login() {
                 />
               </div>
 
+              {challengeToken && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Verification code</Label>
+                  <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                </div>
+              )}
+
               {needsSetup && (
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="confirm">Confirm password</Label>
@@ -140,7 +186,7 @@ export function Login() {
               {displayError && <p className="text-sm text-destructive">{displayError}</p>}
 
               <Button type="submit" disabled={loading} className="w-full">
-                {loading ? '...' : needsSetup ? 'Create account' : 'Login'}
+                {loading ? '...' : challengeToken ? 'Verify code' : needsSetup ? 'Create account' : 'Login'}
               </Button>
             </form>
           </div>
