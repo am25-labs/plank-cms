@@ -16,7 +16,7 @@ interface TwoFactorSetupResponse {
 }
 
 export function SecurityCard() {
-  const { user, updateUser } = useAuth()
+  const { user, updateUser, logout } = useAuth()
   const { loading: changingPw, error: pwError, request } = useApi()
   const { loading: loading2FA, error: twoFaError, request: request2FA } = useApi<TwoFactorSetupResponse>()
 
@@ -30,6 +30,7 @@ export function SecurityCard() {
   const [setupData, setSetupData] = useState<TwoFactorSetupResponse | null>(null)
   const [otpCode, setOtpCode] = useState('')
   const [disablePassword, setDisablePassword] = useState('')
+  const [justEnabled2FA, setJustEnabled2FA] = useState(false)
 
   useEffect(() => {
     if (typeof user?.twoFactorEnabled === 'boolean') {
@@ -51,6 +52,7 @@ export function SecurityCard() {
     setSetupData(null)
     setOtpCode('')
     setDisablePassword('')
+    setJustEnabled2FA(false)
   }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -79,6 +81,7 @@ export function SecurityCard() {
     updateUser({ twoFactorEnabled: true })
     setSetupData(null)
     setOtpCode('')
+    setJustEnabled2FA(true)
   }
 
   async function handleDisable2FA() {
@@ -208,6 +211,22 @@ export function SecurityCard() {
 
               {twoFactorEnabled && (
                 <div className="space-y-3 rounded-md border border-border p-4">
+                  {justEnabled2FA && (
+                    <div className="space-y-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 p-3">
+                      <p className="text-sm font-medium text-emerald-300">2FA is now enabled.</p>
+                      <p className="text-xs text-emerald-200/90">
+                        For security, re-login is recommended now. This prevents accidental changes and confirms your new security state.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          logout()
+                        }}
+                      >
+                        Re-login now
+                      </Button>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
                       Enter a verification code from your authenticator app to disable 2FA.
@@ -243,7 +262,11 @@ export function SecurityCard() {
                       required
                     />
                   </div>
-                  <Button variant="destructive" onClick={handleDisable2FA} disabled={loading2FA || otpCode.length !== 6 || !disablePassword}>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDisable2FA}
+                    disabled={justEnabled2FA || loading2FA || otpCode.length !== 6 || !disablePassword}
+                  >
                     Disable 2FA
                   </Button>
                   {twoFaError && <p className="text-sm text-destructive">{twoFaError}</p>}
