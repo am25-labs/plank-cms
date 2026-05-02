@@ -205,7 +205,7 @@ export function Dashboard() {
     <div>
       <HeaderFixed>
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold -mt-2">Dashboard</h1>
+          <h1 className="text-2xl font-bold -mt-2">Plank Forge</h1>
           {canWriteEntries && (
             <Button onClick={handleNewEntry} disabled={!contentTypes || contentTypes.length === 0}>
               <PlusIcon className="size-4" />
