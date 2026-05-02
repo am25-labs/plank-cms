@@ -5,7 +5,7 @@ import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
 import { Input } from '@/components/ui/input.tsx'
 import { Label } from '@/components/ui/label.tsx'
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp.tsx'
+import { InputOTP, InputOTPGroup, InputOTPSlot, InputOTPSeparator } from '@/components/ui/input-otp.tsx'
 
 interface AuthResponse {
   requiresTwoFactor: boolean
@@ -38,6 +38,7 @@ export function Login() {
   const [challengeToken, setChallengeToken] = useState<string | null>(null)
   const [otpCode, setOtpCode] = useState('')
   const [backupCode, setBackupCode] = useState('')
+  const [useBackupCode, setUseBackupCode] = useState(false)
 
   useEffect(() => {
     fetch('/cms/auth/setup')
@@ -59,7 +60,7 @@ export function Login() {
       if (challengeToken) {
         const verifyRes = await request('/cms/auth/login/2fa', 'POST', {
           challengeToken,
-          code: backupCode.trim() || otpCode,
+          code: useBackupCode ? backupCode.trim() : otpCode,
         })
         if (!verifyRes.user) throw new Error('Invalid 2FA response')
         login(
@@ -83,6 +84,7 @@ export function Login() {
         setChallengeToken(res.challengeToken)
         setOtpCode('')
         setBackupCode('')
+        setUseBackupCode(false)
         return
       }
       if (!res.user) throw new Error('Invalid login response')
@@ -156,33 +158,56 @@ export function Login() {
 
               {challengeToken && (
                 <>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Verification code</Label>
-                    <InputOTP
-                      maxLength={6}
-                      value={otpCode}
-                      onChange={setOtpCode}
-                      containerClassName="w-full justify-between"
-                    >
-                      <InputOTPGroup className="w-full justify-between">
-                        <InputOTPSlot index={0} className="w-11 flex-none" />
-                        <InputOTPSlot index={1} className="w-11 flex-none" />
-                        <InputOTPSlot index={2} className="w-11 flex-none" />
-                        <InputOTPSlot index={3} className="w-11 flex-none" />
-                        <InputOTPSlot index={4} className="w-11 flex-none" />
-                        <InputOTPSlot index={5} className="w-11 flex-none" />
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="backup-code">Backup code (optional)</Label>
-                    <Input
-                      id="backup-code"
-                      placeholder="ABCD-EFGH"
-                      value={backupCode}
-                      onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
-                    />
-                  </div>
+                  {!useBackupCode ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Verification code</Label>
+                      <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
+                        <InputOTPGroup>
+                          <InputOTPSlot index={0} />
+                          <InputOTPSlot index={1} />
+                          <InputOTPSlot index={2} />
+                        </InputOTPGroup>
+                        <InputOTPSeparator />
+                        <InputOTPGroup>
+                          <InputOTPSlot index={3} />
+                          <InputOTPSlot index={4} />
+                          <InputOTPSlot index={5} />
+                        </InputOTPGroup>
+                      </InputOTP>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-fit px-0 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setUseBackupCode(true)
+                          setOtpCode('')
+                        }}
+                      >
+                        Use backup code instead
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="backup-code">Backup code</Label>
+                      <Input
+                        id="backup-code"
+                        placeholder="ABCD-EFGH"
+                        value={backupCode}
+                        onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="w-fit px-0 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setUseBackupCode(false)
+                          setBackupCode('')
+                        }}
+                      >
+                        Use authenticator code instead
+                      </Button>
+                    </div>
+                  )}
                 </>
               )}
 

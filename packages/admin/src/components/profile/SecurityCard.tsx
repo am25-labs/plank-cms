@@ -36,6 +36,7 @@ export function SecurityCard() {
   const [disablePassword, setDisablePassword] = useState('')
   const [justEnabled2FA, setJustEnabled2FA] = useState(false)
   const [backupCodes, setBackupCodes] = useState<string[]>([])
+  const [copiedBackupCodes, setCopiedBackupCodes] = useState(false)
 
   useEffect(() => {
     if (typeof user?.twoFactorEnabled === 'boolean') {
@@ -58,6 +59,7 @@ export function SecurityCard() {
     setOtpCode('')
     setDisablePassword('')
     setJustEnabled2FA(false)
+    setCopiedBackupCodes(false)
   }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -100,6 +102,7 @@ export function SecurityCard() {
     setOtpCode('')
     setDisablePassword('')
     setBackupCodes([])
+    setCopiedBackupCodes(false)
   }
 
   return (
@@ -231,7 +234,7 @@ export function SecurityCard() {
                         For security, re-login is recommended now. This prevents accidental changes and confirms your new security state.
                       </p>
                       <Button
-                        variant="secondary"
+                        variant="default"
                         onClick={() => {
                           logout()
                         }}
@@ -255,11 +258,17 @@ export function SecurityCard() {
                           </div>
                           <Button
                             variant="outline"
-                            onClick={() => {
-                              navigator.clipboard.writeText(backupCodes.join('\n')).catch(() => {})
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(backupCodes.join('\n'))
+                                setCopiedBackupCodes(true)
+                                setTimeout(() => setCopiedBackupCodes(false), 2000)
+                              } catch {
+                                setCopiedBackupCodes(false)
+                              }
                             }}
                           >
-                            Copy backup codes
+                            {copiedBackupCodes ? 'Copied' : 'Copy backup codes'}
                           </Button>
                         </div>
                       )}
