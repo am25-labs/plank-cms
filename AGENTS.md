@@ -46,6 +46,7 @@ Recent history favors short, imperative commit messages (e.g. `Fix 2FA QR genera
 
 - Keep commits focused and atomic.
 - Use imperative subject lines; optionally include a scope (`core:`, `admin:`).
+- Suggested commit messages must be 32 characters max.
 - PRs should include: purpose, affected packages, manual test steps, env/migration notes, and screenshots for UI changes.
 - Link related issues and call out breaking changes explicitly.
 - Never commit on behalf of the user. Creating commits is exclusively the user's responsibility.
