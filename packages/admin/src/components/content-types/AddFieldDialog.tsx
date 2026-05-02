@@ -11,9 +11,10 @@ import {
   LinkIcon,
   FingerprintIcon,
   ArrowLeftIcon,
-  ListIcon,
+  LayoutListIcon,
   PlusIcon,
   Trash2Icon,
+  ListTreeIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx'
@@ -28,7 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select.tsx'
-import type { FieldCardData, MediaAllowedType, RelationType, ArraySubField, ArraySubFieldType, FieldWidth } from './FieldCard.tsx'
+import type {
+  FieldCardData,
+  MediaAllowedType,
+  RelationType,
+  ArraySubField,
+  ArraySubFieldType,
+  FieldWidth,
+} from './FieldCard.tsx'
 import { DEFAULT_FIELD_WIDTH, FIELD_WIDTH_SPAN } from './FieldCard.tsx'
 
 type FieldType = FieldCardData['type']
@@ -55,11 +63,43 @@ type ArraySubTypeOption = {
 const ARRAY_SUBFIELD_OPTIONS: ArraySubTypeOption[] = [
   { type: 'string', icon: TypeIcon, label: 'Text', color: 'text-blue-600', bg: 'bg-blue-50' },
   { type: 'text', icon: AlignLeftIcon, label: 'Long Text', color: 'text-sky-600', bg: 'bg-sky-50' },
-  { type: 'richtext', icon: FileTextIcon, label: 'Rich Text', color: 'text-violet-600', bg: 'bg-violet-50' },
-  { type: 'number', subtype: 'integer', icon: HashIcon, label: 'Integer', color: 'text-orange-600', bg: 'bg-orange-50' },
-  { type: 'number', subtype: 'float', icon: HashIcon, label: 'Decimal', color: 'text-orange-600', bg: 'bg-orange-50' },
-  { type: 'boolean', icon: ToggleLeftIcon, label: 'Boolean', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { type: 'datetime', icon: CalendarIcon, label: 'Date & Time', color: 'text-amber-600', bg: 'bg-amber-50' },
+  {
+    type: 'richtext',
+    icon: FileTextIcon,
+    label: 'Rich Text',
+    color: 'text-violet-600',
+    bg: 'bg-violet-50',
+  },
+  {
+    type: 'number',
+    subtype: 'integer',
+    icon: HashIcon,
+    label: 'Integer',
+    color: 'text-orange-600',
+    bg: 'bg-orange-50',
+  },
+  {
+    type: 'number',
+    subtype: 'float',
+    icon: HashIcon,
+    label: 'Decimal',
+    color: 'text-orange-600',
+    bg: 'bg-orange-50',
+  },
+  {
+    type: 'boolean',
+    icon: ToggleLeftIcon,
+    label: 'Boolean',
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-50',
+  },
+  {
+    type: 'datetime',
+    icon: CalendarIcon,
+    label: 'Date & Time',
+    color: 'text-amber-600',
+    bg: 'bg-amber-50',
+  },
   { type: 'media', icon: ImageIcon, label: 'Media', color: 'text-rose-600', bg: 'bg-rose-50' },
 ]
 
@@ -137,7 +177,7 @@ const TYPE_OPTIONS: TypeOption[] = [
   {
     type: 'datetime',
     icon: CalendarIcon,
-    label: 'Date & time (datetime)',
+    label: 'Date & time',
     description: 'Timestamps and dates',
     color: 'text-amber-600',
     bg: 'bg-amber-50',
@@ -160,17 +200,17 @@ const TYPE_OPTIONS: TypeOption[] = [
   },
   {
     type: 'array',
-    icon: ListIcon,
+    icon: LayoutListIcon,
     label: 'Array',
-    description: 'Repeatable list of structured items',
+    description: 'Repeatable list of items',
     color: 'text-cyan-600',
     bg: 'bg-cyan-50',
   },
   {
     type: 'navigation',
-    icon: ListIcon,
+    icon: ListTreeIcon,
     label: 'Navigation',
-    description: 'Nested navigation items with label, href and icon',
+    description: 'Nested navigation items',
     color: 'text-cyan-600',
     bg: 'bg-cyan-50',
   },
@@ -212,7 +252,11 @@ const MEDIA_TYPE_OPTIONS: { value: MediaAllowedType; label: string }[] = [
 const RELATION_TYPE_OPTIONS: { value: RelationType; label: string; description: string }[] = [
   { value: 'many-to-one', label: 'Many-to-One', description: 'Many of these → one of the other' },
   { value: 'one-to-one', label: 'One-to-One', description: 'One of these ↔ one of the other' },
-  { value: 'many-to-many', label: 'Many-to-Many', description: 'Many of these ↔ many of the other' },
+  {
+    value: 'many-to-many',
+    label: 'Many-to-Many',
+    description: 'Many of these ↔ many of the other',
+  },
 ]
 
 const RESERVED_SQL_IDENTIFIERS = new Set([
@@ -414,27 +458,51 @@ export function AddFieldDialog({
   }
 
   function handleSubFieldPickType(option: ArraySubTypeOption) {
-    setSubFieldDraft((prev) => prev ? {
-      ...prev,
-      type: option.type,
-      subtype: option.subtype,
-      width: SUBFIELD_DEFAULT_WIDTH[option.type],
-    } : { ...EMPTY_SUBFIELD_DRAFT, type: option.type, subtype: option.subtype, width: SUBFIELD_DEFAULT_WIDTH[option.type] })
+    setSubFieldDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            type: option.type,
+            subtype: option.subtype,
+            width: SUBFIELD_DEFAULT_WIDTH[option.type],
+          }
+        : {
+            ...EMPTY_SUBFIELD_DRAFT,
+            type: option.type,
+            subtype: option.subtype,
+            width: SUBFIELD_DEFAULT_WIDTH[option.type],
+          },
+    )
   }
 
   function handleConfirmSubField() {
     if (!subFieldDraft) return
     const trimmed = subFieldDraft.name.trim()
-    if (!trimmed) { setSubFieldNameError('Name is required'); return }
-    if (!/^[a-z][a-z0-9_]*$/.test(trimmed)) { setSubFieldNameError('Lowercase letters, digits and underscores only'); return }
-    if (isReservedSqlIdentifier(trimmed)) { setSubFieldNameError('This name is reserved by SQL. Choose another one.'); return }
-    if (config.arrayFields.some((f) => f.name === trimmed)) { setSubFieldNameError('A sub-field with this name already exists'); return }
+    if (!trimmed) {
+      setSubFieldNameError('Name is required')
+      return
+    }
+    if (!/^[a-z][a-z0-9_]*$/.test(trimmed)) {
+      setSubFieldNameError('Lowercase letters, digits and underscores only')
+      return
+    }
+    if (isReservedSqlIdentifier(trimmed)) {
+      setSubFieldNameError('This name is reserved by SQL. Choose another one.')
+      return
+    }
+    if (config.arrayFields.some((f) => f.name === trimmed)) {
+      setSubFieldNameError('A sub-field with this name already exists')
+      return
+    }
     const newSubField: ArraySubField = {
       name: trimmed,
       type: subFieldDraft.type,
       subtype: subFieldDraft.subtype,
       required: subFieldDraft.required || undefined,
-      allowedTypes: subFieldDraft.type === 'media' && subFieldDraft.allowedTypes.length > 0 ? subFieldDraft.allowedTypes : undefined,
+      allowedTypes:
+        subFieldDraft.type === 'media' && subFieldDraft.allowedTypes.length > 0
+          ? subFieldDraft.allowedTypes
+          : undefined,
       width: subFieldDraft.width,
     }
     setConfig((prev) => ({ ...prev, arrayFields: [...prev.arrayFields, newSubField] }))
@@ -527,7 +595,11 @@ export function AddFieldDialog({
   const showStep2 = Boolean(selected)
   const baseLabel = selected?.label.replace(/\s*\(.*?\)/, '') ?? ''
   const title = isEditing ? 'Edit field' : showStep2 ? `${baseLabel} field` : 'Add a field'
-  const dialogWidth = !showStep2 ? 'max-w-3xl' : selected?.type === 'array' ? 'max-w-lg' : 'max-w-md'
+  const dialogWidth = !showStep2
+    ? 'max-w-3xl'
+    : selected?.type === 'array'
+      ? 'max-w-lg'
+      : 'max-w-md'
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -658,7 +730,9 @@ export function AddFieldDialog({
                   <div className="grid grid-cols-6 gap-1.5">
                     {config.arrayFields.map((sf, index) => {
                       const opt = ARRAY_SUBFIELD_OPTIONS.find(
-                        (o) => o.type === sf.type && (o.subtype ?? undefined) === (sf.subtype ?? undefined),
+                        (o) =>
+                          o.type === sf.type &&
+                          (o.subtype ?? undefined) === (sf.subtype ?? undefined),
                       )
                       const SfIcon = opt?.icon ?? TypeIcon
                       return (
@@ -666,7 +740,9 @@ export function AddFieldDialog({
                           key={`${sf.name}-${index}`}
                           className={`${FIELD_WIDTH_SPAN[sf.width ?? 'full']} flex items-center gap-1.5 rounded-md border border-dashed border-border p-2`}
                         >
-                          <div className={`flex size-5 shrink-0 items-center justify-center rounded ${opt?.bg ?? 'bg-muted'}`}>
+                          <div
+                            className={`flex size-5 shrink-0 items-center justify-center rounded ${opt?.bg ?? 'bg-muted'}`}
+                          >
                             <SfIcon className={`size-3 ${opt?.color ?? 'text-muted-foreground'}`} />
                           </div>
                           <div className="min-w-0 flex-1">
@@ -675,7 +751,9 @@ export function AddFieldDialog({
                               onChange={(e) => handleRenameSubField(index, e.target.value)}
                               className="h-6 px-1.5 text-xs"
                             />
-                            <p className="truncate text-[10px] text-muted-foreground">{opt?.label}</p>
+                            <p className="truncate text-[10px] text-muted-foreground">
+                              {opt?.label}
+                            </p>
                           </div>
                           <button
                             type="button"
@@ -697,7 +775,9 @@ export function AddFieldDialog({
                       {ARRAY_SUBFIELD_OPTIONS.map((opt) => {
                         const SfIcon = opt.icon
                         const key = `${opt.type}${opt.subtype ?? ''}`
-                        const isSelected = subFieldDraft.type === opt.type && (subFieldDraft.subtype ?? undefined) === (opt.subtype ?? undefined)
+                        const isSelected =
+                          subFieldDraft.type === opt.type &&
+                          (subFieldDraft.subtype ?? undefined) === (opt.subtype ?? undefined)
                         return (
                           <button
                             key={key}
@@ -705,10 +785,14 @@ export function AddFieldDialog({
                             onClick={() => handleSubFieldPickType(opt)}
                             className={[
                               'flex items-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors',
-                              isSelected ? 'border-primary bg-accent' : 'border-border hover:border-primary hover:bg-accent',
+                              isSelected
+                                ? 'border-primary bg-accent'
+                                : 'border-border hover:border-primary hover:bg-accent',
                             ].join(' ')}
                           >
-                            <div className={`flex size-5 shrink-0 items-center justify-center rounded ${opt.bg}`}>
+                            <div
+                              className={`flex size-5 shrink-0 items-center justify-center rounded ${opt.bg}`}
+                            >
                               <SfIcon className={`size-3 ${opt.color}`} />
                             </div>
                             <span className="truncate text-xs font-medium">{opt.label}</span>
@@ -723,12 +807,18 @@ export function AddFieldDialog({
                         autoFocus
                         value={subFieldDraft.name}
                         onChange={(e) => {
-                          setSubFieldDraft((prev) => prev ? { ...prev, name: e.target.value } : prev)
+                          setSubFieldDraft((prev) =>
+                            prev ? { ...prev, name: e.target.value } : prev,
+                          )
                           setSubFieldNameError('')
                         }}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmSubField() }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleConfirmSubField()
+                        }}
                       />
-                      {subFieldNameError && <p className="text-xs text-destructive">{subFieldNameError}</p>}
+                      {subFieldNameError && (
+                        <p className="text-xs text-destructive">{subFieldNameError}</p>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
@@ -736,13 +826,33 @@ export function AddFieldDialog({
                         <Checkbox
                           id="subfield-required"
                           checked={subFieldDraft.required}
-                          onCheckedChange={(v) => setSubFieldDraft((prev) => prev ? { ...prev, required: Boolean(v) } : prev)}
+                          onCheckedChange={(v) =>
+                            setSubFieldDraft((prev) =>
+                              prev ? { ...prev, required: Boolean(v) } : prev,
+                            )
+                          }
                         />
-                        <Label htmlFor="subfield-required" className="cursor-pointer font-normal text-sm">Required</Label>
+                        <Label
+                          htmlFor="subfield-required"
+                          className="cursor-pointer font-normal text-sm"
+                        >
+                          Required
+                        </Label>
                       </div>
                       <div className="flex gap-1.5">
-                        <Button variant="ghost" size="sm" onClick={() => { setSubFieldDraft(null); setSubFieldNameError('') }}>Cancel</Button>
-                        <Button size="sm" onClick={handleConfirmSubField}>Add</Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSubFieldDraft(null)
+                            setSubFieldNameError('')
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleConfirmSubField}>
+                          Add
+                        </Button>
                       </div>
                     </div>
                   </div>

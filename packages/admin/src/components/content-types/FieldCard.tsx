@@ -12,7 +12,8 @@ import {
   GripVerticalIcon,
   PencilIcon,
   Trash2Icon,
-  ListIcon,
+  LayoutListIcon,
+  ListTreeIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DraggableSyntheticListeners } from '@dnd-kit/core'
@@ -34,7 +35,14 @@ type NumberSubtype = 'integer' | 'float'
 export type FieldWidth = 'full' | 'two-thirds' | 'half' | 'third'
 export type MediaAllowedType = 'image' | 'video' | 'audio' | 'document'
 export type RelationType = 'many-to-one' | 'one-to-one' | 'one-to-many' | 'many-to-many'
-export type ArraySubFieldType = 'string' | 'text' | 'richtext' | 'number' | 'boolean' | 'datetime' | 'media'
+export type ArraySubFieldType =
+  | 'string'
+  | 'text'
+  | 'richtext'
+  | 'number'
+  | 'boolean'
+  | 'datetime'
+  | 'media'
 export type ArraySubField = {
   name: string
   type: ArraySubFieldType
@@ -71,7 +79,12 @@ function getFieldMeta(type: FieldType, subtype?: NumberSubtype): FieldMeta {
     case 'string':
       return { icon: TypeIcon, label: 'Text (string)', color: 'text-blue-600', bg: 'bg-blue-50' }
     case 'text':
-      return { icon: AlignLeftIcon, label: 'Long text (string)', color: 'text-sky-600', bg: 'bg-sky-50' }
+      return {
+        icon: AlignLeftIcon,
+        label: 'Long text (string)',
+        color: 'text-sky-600',
+        bg: 'bg-sky-50',
+      }
     case 'richtext':
       return {
         icon: FileTextIcon,
@@ -96,22 +109,27 @@ function getFieldMeta(type: FieldType, subtype?: NumberSubtype): FieldMeta {
     case 'datetime':
       return {
         icon: CalendarIcon,
-        label: 'Date & time (datetime)',
+        label: 'Date & time',
         color: 'text-amber-600',
         bg: 'bg-amber-50',
       }
     case 'media':
       return { icon: ImageIcon, label: 'Media', color: 'text-rose-600', bg: 'bg-rose-50' }
     case 'media-gallery':
-      return { icon: LayoutGridIcon, label: 'Media Gallery', color: 'text-pink-600', bg: 'bg-pink-50' }
+      return {
+        icon: LayoutGridIcon,
+        label: 'Media Gallery',
+        color: 'text-pink-600',
+        bg: 'bg-pink-50',
+      }
     case 'relation':
       return { icon: LinkIcon, label: 'Relation', color: 'text-indigo-600', bg: 'bg-indigo-50' }
     case 'uid':
       return { icon: FingerprintIcon, label: 'UID', color: 'text-teal-600', bg: 'bg-teal-50' }
     case 'array':
-      return { icon: ListIcon, label: 'Array', color: 'text-cyan-600', bg: 'bg-cyan-50' }
+      return { icon: LayoutListIcon, label: 'Array', color: 'text-cyan-600', bg: 'bg-cyan-50' }
     case 'navigation':
-      return { icon: ListIcon, label: 'Navigation', color: 'text-cyan-600', bg: 'bg-cyan-50' }
+      return { icon: ListTreeIcon, label: 'Navigation', color: 'text-cyan-600', bg: 'bg-cyan-50' }
   }
 }
 
@@ -293,7 +311,9 @@ export function FieldCard({
                 className={`${FIELD_WIDTH_SPAN[subField.width ?? 'full']} rounded-md border border-dashed border-border p-2`}
               >
                 <div className="flex items-center gap-1.5">
-                  <div className={`flex size-5 shrink-0 items-center justify-center rounded ${subMeta.bg}`}>
+                  <div
+                    className={`flex size-5 shrink-0 items-center justify-center rounded ${subMeta.bg}`}
+                  >
                     <SubIcon className={`size-3 ${subMeta.color}`} />
                   </div>
                   <span className="truncate text-xs font-medium">
@@ -301,7 +321,9 @@ export function FieldCard({
                     {subField.required && <span className="ml-0.5 text-destructive">*</span>}
                   </span>
                 </div>
-                <p className="mt-0.5 truncate pl-6 text-[10px] text-muted-foreground">{subMeta.label}</p>
+                <p className="mt-0.5 truncate pl-6 text-[10px] text-muted-foreground">
+                  {subMeta.label}
+                </p>
                 {onArraySubFieldWidthChange && (
                   <div className="mt-1 flex items-center gap-px rounded-md border border-border p-0.5">
                     {WIDTH_OPTIONS.map(({ value, label: tooltip }) => (
