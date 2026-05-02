@@ -17,6 +17,7 @@ type Row = Record<string, unknown> & {
   _author_organization?: string | null
   _author_country?: string | null
 }
+type LocalizedValues = Record<string, Record<string, unknown>>
 
 function normalizeNavigationItems(value: unknown): unknown {
   if (!Array.isArray(value)) return value
@@ -240,19 +241,20 @@ function serializeEntry(
   // Build an effective source object where localized values (if any) are applied
   const effective: Record<string, unknown> = { ...source }
   if (locale) {
+    const sourceObj = source as Record<string, unknown>
     const localizedContainer =
       source &&
       typeof source === 'object' &&
-      (source as any).localized &&
-      typeof (source as any).localized === 'object'
-        ? (source as any).localized
+      sourceObj.localized &&
+      typeof sourceObj.localized === 'object'
+        ? (sourceObj.localized as LocalizedValues)
         : row.localized && typeof row.localized === 'object'
-          ? (row.localized as Record<string, any>)
+          ? (row.localized as LocalizedValues)
           : {}
     const localizableTypes = new Set(['string', 'text', 'richtext', 'uid'])
     for (const f of ct.fields) {
       if (!localizableTypes.has(f.type)) continue
-      let val: any = undefined
+      let val: unknown = undefined
       if (localizedContainer[locale] && localizedContainer[locale][f.name] !== undefined) {
         val = localizedContainer[locale][f.name]
       } else {

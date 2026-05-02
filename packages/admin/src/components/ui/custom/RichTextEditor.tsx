@@ -127,13 +127,12 @@ export function RichTextEditor({
     const current = JSON.stringify(editor.getJSON())
     if (current !== value) editor.commands.setContent(incoming, { emitUpdate: false })
     setIsEmpty(editor.isEmpty)
-  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [value])
 
   async function handleInsertImage() {
     if (!editor || !onInsertImage) return
     const img = await onInsertImage()
     if (!img) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     editor
       .chain()
       .focus()
@@ -142,7 +141,7 @@ export function RichTextEditor({
         alt: img.alt ?? undefined,
         width: img.width ?? undefined,
         height: img.height ?? undefined,
-      } as any)
+      })
       .run()
   }
 

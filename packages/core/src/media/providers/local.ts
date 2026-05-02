@@ -29,7 +29,7 @@ export const localProvider: MediaProvider = {
     return { url: `${base}/uploads/${key}`, key }
   },
 
-  async uploadRaw(buffer, exactKey, mimeType) {
+  async uploadRaw(buffer, exactKey, _mimeType) {
     const base_dir = await uploadsDir()
     const dir = join(base_dir, exactKey.split('/').slice(0, -1).join('/'))
     await mkdir(dir, { recursive: true })

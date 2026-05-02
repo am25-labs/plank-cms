@@ -751,7 +751,7 @@ export function EntriesList() {
     fetchViewConfig(slug)
       .then((saved) => setViewConfig(parseViewConfig(saved, ct.fields)))
       .catch(() => setViewConfig(defaultViewConfig(ct.fields)))
-  }, [ct?.slug]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ct?.slug])
 
   useEffect(() => {
     setSelected(new Set())

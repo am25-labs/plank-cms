@@ -6,5 +6,5 @@ export function useSecondaryPanel(content: ReactNode) {
   useEffect(() => {
     setContent(content)
     return () => setContent(null)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 }

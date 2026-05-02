@@ -286,13 +286,13 @@ export function EntryForm() {
     // Include localized object when present
     if (values.localized && Object.keys(values.localized as Record<string, unknown>).length > 0) {
       // ensure meta
-      // @ts-ignore
+      // @ts-expect-error: Nested locale objects are dynamic at runtime.
       if (!values.localized._meta) values.localized._meta = {}
-      // @ts-ignore
+      // @ts-expect-error: Nested locale objects are dynamic at runtime.
       values.localized._meta.enabled = localizationEnabled
-      // @ts-ignore
+      // @ts-expect-error: Nested locale objects are dynamic at runtime.
       values.localized._meta.primary = defaultLocale
-      // @ts-ignore
+      // @ts-expect-error: Nested locale objects are dynamic at runtime.
       body.localized = values.localized
     }
 

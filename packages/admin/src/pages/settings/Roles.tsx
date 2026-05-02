@@ -80,7 +80,8 @@ export function SettingsRoles() {
   function toggle(roleId: string, permission: string) {
     setPerms((prev) => {
       const next = new Set(prev[roleId])
-      next.has(permission) ? next.delete(permission) : next.add(permission)
+      if (next.has(permission)) next.delete(permission)
+      else next.add(permission)
       return { ...prev, [roleId]: next }
     })
     setDirty((prev) => new Set(prev).add(roleId))

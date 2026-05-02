@@ -32,7 +32,7 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
         const message = err instanceof Error ? err.message : 'Unknown error'
         setState({ data: null, loading: false, error: message })
       })
-  }, [url, options]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [url, options])
 
   useEffect(() => {
     run()

@@ -40,7 +40,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             }
             if (parsed.length) setLocales(parsed)
           }
-        } catch {}
+        } catch {
+          // Ignore legacy settings payload shape errors and keep defaults.
+        }
         if (data?.default_locale) setDefaultLocale(data.default_locale)
       })
       .catch(() => {})

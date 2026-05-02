@@ -75,7 +75,7 @@ export async function createTable(contentType: ContentType): Promise<void> {
     await pool.query(
       `CREATE INDEX IF NOT EXISTS idx_${contentType.tableName}_localized_gin ON ${quotedTableName} USING gin (localized)`,
     )
-  } catch (err) {
+  } catch (_err) {
     // ignore index creation errors
   }
 
@@ -232,11 +232,11 @@ export async function syncAllTables(): Promise<void> {
           await pool.query(
             `CREATE INDEX IF NOT EXISTS idx_${ct.tableName}_localized_gin ON ${quotedTableName} USING gin (localized)`,
           )
-        } catch (err) {
+        } catch (_err) {
           // ignore index creation errors
         }
         console.log(`[plank] Added missing column "localized" to table "${ct.tableName}"`)
-      } catch (err) {
+      } catch (_err) {
         // table may not exist or other race conditions; ignore and continue
       }
     }

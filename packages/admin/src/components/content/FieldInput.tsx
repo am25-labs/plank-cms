@@ -596,7 +596,7 @@ function MediaGalleryInput({
       }
       if (Object.keys(updates).length > 0) setUrlCache((prev) => ({ ...prev, ...updates }))
     })
-  }, [ids.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ids.join(',')])
 
   // Fetch filenames for IDs not yet in name cache
   useEffect(() => {
@@ -613,7 +613,7 @@ function MediaGalleryInput({
         if (Object.keys(updates).length > 0) setNameCache((prev) => ({ ...prev, ...updates }))
       })
       .catch(() => {})
-  }, [ids.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ids.join(',')])
 
   function getPreviewUrl(id: string): string | null {
     if (id.startsWith('http')) return id
@@ -747,7 +747,7 @@ function FloatInput({
     }
     const n = typeof value === 'number' ? value : parseFloat(String(value))
     if (!isNaN(n) && n !== parseFloat(raw)) setRaw(String(n))
-  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [value])
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     const s = e.target.value.replace(',', '.')

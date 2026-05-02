@@ -309,7 +309,6 @@ export async function loginWithTwoFactor(req: Request, res: Response): Promise<v
       [user.id],
     )
     for (const backupRow of backupRows) {
-      // eslint-disable-next-line no-await-in-loop
       const match = await bcrypt.compare(normalizedBackup, backupRow.code_hash)
       if (match) {
         await pool.query('UPDATE plank_user_backup_codes SET used_at = NOW() WHERE id = $1', [

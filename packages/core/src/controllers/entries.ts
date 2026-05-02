@@ -12,19 +12,23 @@ import { getProvider } from '../media/index.js'
 import { triggerWebhooks } from './webhooks.js'
 
 type Locale = string | undefined
+type LocalizedValues = Record<string, Record<string, unknown>> & {
+  _meta?: { enabled?: boolean; primary?: string }
+}
 
 function resolveLocalizedRow(
-  row: Record<string, any>,
+  row: Record<string, unknown>,
   ct: { fields: FieldDefinition[] },
   locale: Locale,
   fallbacks: string[] = [],
 ) {
-  const localized = row.localized && typeof row.localized === 'object' ? row.localized : {}
-  const resolved = { ...row }
+  const localized: LocalizedValues =
+    row.localized && typeof row.localized === 'object' ? (row.localized as LocalizedValues) : {}
+  const resolved: Record<string, unknown> = { ...row }
   const localizableTypes = new Set(['string', 'text', 'richtext', 'uid'])
   for (const f of ct.fields) {
     if (!localizableTypes.has(f.type)) continue
-    let val: any = undefined
+    let val: unknown = undefined
     if (locale && localized[locale] && localized[locale][f.name] !== undefined) {
       val = localized[locale][f.name]
     } else {
@@ -150,11 +154,12 @@ export const listEntries: SlugParam = async (req, res) => {
   ])
 
   const provider = await getProvider()
-  function entryMatchesLocale(row: Record<string, any>, locale?: string) {
+  function entryMatchesLocale(row: Record<string, unknown>, locale?: string) {
     if (!locale) return true
-    const localized = row.localized && typeof row.localized === 'object' ? row.localized : {}
+    const localized: LocalizedValues =
+      row.localized && typeof row.localized === 'object' ? (row.localized as LocalizedValues) : {}
     const locales = Object.keys(localized).filter((k) => !k.startsWith('_'))
-    const meta = localized._meta || {}
+    const meta = localized._meta ?? {}
     const enabled = meta.enabled ?? locales.length > 0
     const primary: string | undefined = meta.primary
     if (enabled) {
@@ -181,10 +186,12 @@ export const listEntries: SlugParam = async (req, res) => {
   if (locale) {
     // compute total matching locale across all rows (lightweight: only fetch localized column)
     try {
-      const { rows: allRows } = await pool.query(`SELECT localized FROM ${quotedTableName}`)
-      const matching = (allRows as any[]).filter((r) => entryMatchesLocale(r, locale))
+      const { rows: allRows } = await pool.query<Record<string, unknown>>(
+        `SELECT localized FROM ${quotedTableName}`,
+      )
+      const matching = allRows.filter((r) => entryMatchesLocale(r, locale))
       total = matching.length
-    } catch (err) {
+    } catch {
       // fallback to previous total
     }
   }
