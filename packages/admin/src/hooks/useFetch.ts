@@ -9,8 +9,6 @@ interface FetchState<T> {
 export function useFetch<T>(url: string | null, options?: RequestInit) {
   const [state, setState] = useState<FetchState<T>>({ data: null, loading: Boolean(url), error: null })
 
-  const token = localStorage.getItem('plank_token')
-
   const run = useCallback(() => {
     if (!url) {
       setState({ data: null, loading: false, error: null })
@@ -21,11 +19,10 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     }
 
-    fetch(url, { ...options, headers })
+    fetch(url, { ...options, credentials: 'include', headers })
       .then((res) => {
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
         return res.json() as Promise<T>
@@ -35,7 +32,7 @@ export function useFetch<T>(url: string | null, options?: RequestInit) {
         const message = err instanceof Error ? err.message : 'Unknown error'
         setState({ data: null, loading: false, error: message })
       })
-  }, [url]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [url, options]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     run()

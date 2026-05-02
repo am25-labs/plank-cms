@@ -96,6 +96,8 @@ export async function init(projectName?: string): Promise<void> {
       '',
       `Then start your CMS:`,
       '',
+      `${chalk.yellow('Important:')} keep ${chalk.cyan('PLANK_JWT_SECRET')} and ${chalk.cyan('PLANK_ENCRYPTION_KEY')} set in production.`,
+      '',
       ...(!useCurrentDir ? [`  ${chalk.cyan(`cd ${name}`)}`, ''] : []),
       `  ${chalk.cyan('npm start')}`,
     ].join('\n'),

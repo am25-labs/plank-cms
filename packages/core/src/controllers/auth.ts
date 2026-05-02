@@ -35,41 +35,133 @@ type UserRow = {
   country: string | null
   two_factor_enabled: boolean
   two_factor_secret: string | null
+  session_version: number
 }
 type CountRow = { count: string }
 type RoleRow = { id: string; name: string; permissions: string[] }
 
-const loginAttempts = new Map<string, { count: number; resetAt: number }>()
-
-const RATE_LIMIT_MAX = 10
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_RATE_LIMIT_MAX = 10
+const LOGIN_2FA_RATE_LIMIT_MAX = 5
 
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now()
-  const entry = loginAttempts.get(ip)
+const ACCESS_TOKEN_COOKIE = 'plank_session'
+const ACCESS_TOKEN_EXPIRES_SECONDS = 60 * 15
 
-  if (!entry || now > entry.resetAt) {
-    loginAttempts.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
-    return true
-  }
-
-  if (entry.count >= RATE_LIMIT_MAX) return false
-
-  entry.count++
-  return true
+type SessionJwtPayload = {
+  sub: string
+  roleId: string
+  sv: number
 }
 
-function clearRateLimit(ip: string): void {
-  loginAttempts.delete(ip)
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
+function setSessionCookie(res: Response, token: string): void {
+  res.cookie(ACCESS_TOKEN_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: ACCESS_TOKEN_EXPIRES_SECONDS * 1000,
+  })
+}
+
+function clearSessionCookie(res: Response): void {
+  res.clearCookie(ACCESS_TOKEN_COOKIE, {
+    httpOnly: true,
+    secure: isProduction(),
+    sameSite: 'lax',
+    path: '/',
+  })
+}
+
+async function consumeRateLimit(scope: string, rateKey: string, max: number): Promise<boolean> {
+  const resetAt = new Date(Date.now() + RATE_LIMIT_WINDOW_MS)
+  const { rows } = await pool.query<{ count: number; reset_at: Date }>(
+    `INSERT INTO plank_auth_rate_limits (id, scope, rate_key, count, reset_at)
+     VALUES ($1, $2, $3, 1, $4)
+     ON CONFLICT (scope, rate_key)
+     DO UPDATE
+       SET count = CASE
+                     WHEN plank_auth_rate_limits.reset_at <= NOW() THEN 1
+                     ELSE plank_auth_rate_limits.count + 1
+                   END,
+           reset_at = CASE
+                        WHEN plank_auth_rate_limits.reset_at <= NOW() THEN $4
+                        ELSE plank_auth_rate_limits.reset_at
+                      END,
+           updated_at = NOW()
+     RETURNING count, reset_at`,
+    [createId(), scope, rateKey, resetAt],
+  )
+  return (rows[0]?.count ?? max + 1) <= max
+}
+
+async function clearRateLimit(scope: string, rateKey: string): Promise<void> {
+  await pool.query('DELETE FROM plank_auth_rate_limits WHERE scope = $1 AND rate_key = $2', [
+    scope,
+    rateKey,
+  ])
+}
+
+function buildAccessToken(payload: SessionJwtPayload): string {
+  return jwt.sign(payload, process.env.PLANK_JWT_SECRET!, { expiresIn: '15m' })
+}
+
+function buildChallengeToken(payload: SessionJwtPayload & { twoFactor: true; jti: string }): string {
+  return jwt.sign(payload, process.env.PLANK_JWT_SECRET!, { expiresIn: '5m' })
+}
+
+async function buildAuthPayload(user: UserRow): Promise<{
+  token: string
+  user: {
+    id: string
+    email: string
+    role: string
+    permissions: string[]
+    firstName: string | null
+    lastName: string | null
+    avatarUrl: string | null
+    jobTitle: string | null
+    organization: string | null
+    country: string | null
+    twoFactorEnabled: boolean
+  }
+}> {
+  const { rows: roleRows } = await pool.query<RoleRow>(
+    'SELECT id, name, permissions FROM plank_roles WHERE id = $1',
+    [user.role_id],
+  )
+
+  let avatarUrl = user.avatar_url
+  if (avatarUrl && !avatarUrl.startsWith('http')) {
+    const provider = await getProvider()
+    avatarUrl = await provider.getUrl(avatarUrl)
+  }
+
+  const token = buildAccessToken({ sub: user.id, roleId: user.role_id, sv: user.session_version })
+
+  return {
+    token,
+    user: {
+      id: user.id,
+      email: user.email,
+      role: roleRows[0]?.name ?? 'unknown',
+      permissions: roleRows[0]?.permissions ?? [],
+      firstName: user.first_name,
+      lastName: user.last_name,
+      avatarUrl,
+      jobTitle: user.job_title,
+      organization: user.organization,
+      country: user.country,
+      twoFactorEnabled: user.two_factor_enabled,
+    },
+  }
 }
 
 export async function login(req: Request, res: Response): Promise<void> {
   const ip = req.ip ?? 'unknown'
-  if (!checkRateLimit(ip)) {
-    res.status(429).json({ error: 'Too many login attempts. Try again in 15 minutes.' })
-    return
-  }
-
   const parsed = LoginSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
@@ -77,8 +169,14 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   const { email, password } = parsed.data
+  const rateKey = `${ip}:${email.toLowerCase()}`
+  if (!(await consumeRateLimit('login', rateKey, LOGIN_RATE_LIMIT_MAX))) {
+    res.status(429).json({ error: 'Too many login attempts. Try again in 15 minutes.' })
+    return
+  }
+
   const { rows } = await pool.query<UserRow>(
-    `SELECT id, email, password, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret
+    `SELECT id, email, password, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, session_version
      FROM plank_users
      WHERE email = $1`,
     [email],
@@ -90,65 +188,45 @@ export async function login(req: Request, res: Response): Promise<void> {
     return
   }
 
-  const { rows: roleRows } = await pool.query<RoleRow>(
-    'SELECT id, name, permissions FROM plank_roles WHERE id = $1',
-    [user.role_id],
-  )
-
-  clearRateLimit(ip)
-
-  let avatarUrl = user.avatar_url
-  if (avatarUrl && !avatarUrl.startsWith('http')) {
-    const provider = await getProvider()
-    avatarUrl = await provider.getUrl(avatarUrl)
-  }
+  await clearRateLimit('login', rateKey)
 
   if (user.two_factor_enabled && user.two_factor_secret) {
-    const challengeToken = jwt.sign(
-      { sub: user.id, roleId: user.role_id, twoFactor: true },
-      process.env.PLANK_JWT_SECRET!,
-      { expiresIn: '5m' },
-    )
+    const challengeToken = buildChallengeToken({
+      sub: user.id,
+      roleId: user.role_id,
+      sv: user.session_version,
+      twoFactor: true,
+      jti: createId(),
+    })
     res.json({ requiresTwoFactor: true, challengeToken })
     return
   }
 
-  const token = jwt.sign({ sub: user.id, roleId: user.role_id }, process.env.PLANK_JWT_SECRET!, {
-    expiresIn: '7d',
-  })
+  const auth = await buildAuthPayload(user)
+  setSessionCookie(res, auth.token)
 
   res.json({
     requiresTwoFactor: false,
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      role: roleRows[0]?.name ?? 'unknown',
-      permissions: roleRows[0]?.permissions ?? [],
-      firstName: user.first_name,
-      lastName: user.last_name,
-      avatarUrl,
-      jobTitle: user.job_title,
-      organization: user.organization,
-      country: user.country,
-      twoFactorEnabled: user.two_factor_enabled,
-    },
+    user: auth.user,
   })
 }
 
 export async function loginWithTwoFactor(req: Request, res: Response): Promise<void> {
+  const ip = req.ip ?? 'unknown'
   const parsed = Login2FASchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
-  let payload: { sub: string; roleId: string; twoFactor?: boolean }
+  let payload: { sub: string; roleId: string; sv: number; twoFactor?: boolean; jti?: string }
   try {
     payload = jwt.verify(parsed.data.challengeToken, process.env.PLANK_JWT_SECRET!) as {
       sub: string
       roleId: string
+      sv: number
       twoFactor?: boolean
+      jti?: string
     }
   } catch {
     res.status(401).json({ error: 'Invalid or expired 2FA challenge' })
@@ -159,15 +237,24 @@ export async function loginWithTwoFactor(req: Request, res: Response): Promise<v
     res.status(400).json({ error: 'Invalid 2FA challenge token' })
     return
   }
+  const rateKey = `${ip}:${payload.sub}:${payload.jti ?? 'nojti'}`
+  if (!(await consumeRateLimit('login-2fa', rateKey, LOGIN_2FA_RATE_LIMIT_MAX))) {
+    res.status(429).json({ error: 'Too many 2FA attempts. Try again in 15 minutes.' })
+    return
+  }
 
   const { rows } = await pool.query<UserRow>(
-    `SELECT id, email, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, password
+    `SELECT id, email, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, password, session_version
      FROM plank_users WHERE id = $1`,
     [payload.sub],
   )
   const user = rows[0]
   if (!user || !user.two_factor_enabled || !user.two_factor_secret) {
     res.status(401).json({ error: '2FA is not enabled for this account' })
+    return
+  }
+  if (user.session_version !== payload.sv) {
+    res.status(401).json({ error: '2FA challenge expired. Start login again.' })
     return
   }
 
@@ -179,39 +266,46 @@ export async function loginWithTwoFactor(req: Request, res: Response): Promise<v
     res.status(401).json({ error: 'Invalid verification code' })
     return
   }
+  await clearRateLimit('login-2fa', rateKey)
 
-  const { rows: roleRows } = await pool.query<RoleRow>(
-    'SELECT id, name, permissions FROM plank_roles WHERE id = $1',
-    [user.role_id],
-  )
-
-  let avatarUrl = user.avatar_url
-  if (avatarUrl && !avatarUrl.startsWith('http')) {
-    const provider = await getProvider()
-    avatarUrl = await provider.getUrl(avatarUrl)
-  }
-
-  const token = jwt.sign({ sub: user.id, roleId: user.role_id }, process.env.PLANK_JWT_SECRET!, {
-    expiresIn: '7d',
-  })
+  const auth = await buildAuthPayload(user)
+  setSessionCookie(res, auth.token)
 
   res.json({
     requiresTwoFactor: false,
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      role: roleRows[0]?.name ?? 'unknown',
-      permissions: roleRows[0]?.permissions ?? [],
-      firstName: user.first_name,
-      lastName: user.last_name,
-      avatarUrl,
-      jobTitle: user.job_title,
-      organization: user.organization,
-      country: user.country,
-      twoFactorEnabled: user.two_factor_enabled,
-    },
+    user: auth.user,
   })
+}
+
+export async function logout(req: Request, res: Response): Promise<void> {
+  const cookieHeader = req.headers.cookie ?? ''
+  const raw = cookieHeader
+    .split(';')
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${ACCESS_TOKEN_COOKIE}=`))
+    ?.slice(`${ACCESS_TOKEN_COOKIE}=`.length)
+
+  if (raw) {
+    try {
+      const payload = jwt.verify(decodeURIComponent(raw), process.env.PLANK_JWT_SECRET!) as {
+        sub?: string
+      }
+      if (payload.sub) {
+        await pool.query(
+          'UPDATE plank_users SET session_version = session_version + 1 WHERE id = $1',
+          [payload.sub],
+        )
+      }
+    } catch {
+      // ignore invalid cookie token; still clear cookie
+    }
+  }
+
+  clearSessionCookie(res)
+  // Cleanup best-effort for previous login keys from this client IP.
+  const ip = req.ip ?? 'unknown'
+  await pool.query('DELETE FROM plank_auth_rate_limits WHERE rate_key LIKE $1', [`${ip}:%`])
+  res.status(204).end()
 }
 
 export async function setup(_req: Request, res: Response): Promise<void> {

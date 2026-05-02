@@ -10,7 +10,6 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 interface AuthResponse {
   requiresTwoFactor: boolean
   challengeToken?: string
-  token?: string
   user?: {
     id: string
     email: string
@@ -61,7 +60,7 @@ export function Login() {
           challengeToken,
           code: otpCode,
         })
-        if (!verifyRes.token || !verifyRes.user) throw new Error('Invalid 2FA response')
+        if (!verifyRes.user) throw new Error('Invalid 2FA response')
         login(
           {
             ...verifyRes.user,
@@ -70,7 +69,6 @@ export function Login() {
             country: verifyRes.user.country ?? null,
             twoFactorEnabled: verifyRes.user.twoFactorEnabled ?? false,
           },
-          verifyRes.token,
         )
         navigate('/')
         return
@@ -84,7 +82,7 @@ export function Login() {
         setChallengeToken(res.challengeToken)
         return
       }
-      if (!res.token || !res.user) throw new Error('Invalid login response')
+      if (!res.user) throw new Error('Invalid login response')
       login(
         {
           ...res.user,
@@ -93,7 +91,6 @@ export function Login() {
           country: res.user.country ?? null,
           twoFactorEnabled: res.user.twoFactorEnabled ?? false,
         },
-        res.token,
       )
       navigate('/')
     } catch {

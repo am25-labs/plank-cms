@@ -14,16 +14,14 @@ export function useApi<T = unknown>() {
   async function request(url: string, method: Method, body?: unknown): Promise<T> {
     setState({ data: null, loading: true, error: null })
 
-    const token = localStorage.getItem('plank_token')
-
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     }
 
     try {
       const res = await fetch(url, {
         method,
+        credentials: 'include',
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
       })

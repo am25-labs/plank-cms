@@ -20,11 +20,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [defaultLocale, setDefaultLocale] = useState<string>('en')
 
   const fetchSettings = useCallback(() => {
-    const token = localStorage.getItem('plank_token')
-    if (!token) return
-
     fetch('/cms/admin/settings/general', {
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: 'include',
     })
       .then((res) => (res.ok ? res.json() : null))
       .then((data: Record<string, string> | null) => {

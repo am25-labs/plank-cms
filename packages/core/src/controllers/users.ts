@@ -36,6 +36,11 @@ const TwoFactorCodeSchema = z.object({
   code: z.string().trim().length(6),
 })
 
+const DisableTwoFactorSchema = z.object({
+  password: z.string().min(1),
+  code: z.string().trim().length(6),
+})
+
 type UserRow = { id: string; email: string; role_id: string; role_name?: string; first_name: string | null; last_name: string | null; avatar_url: string | null; job_title: string | null; organization: string | null; country: string | null; two_factor_enabled: boolean; two_factor_secret: string | null; two_factor_temp_secret: string | null; created_at: Date }
 
 async function resolveAvatarUrl(row: UserRow): Promise<UserRow> {
@@ -109,8 +114,7 @@ export async function startTwoFactorSetup(req: Request, res: Response): Promise<
     req.user!.id,
   ])
 
-  const issuer = process.env.PLANK_2FA_ISSUER || 'Plank CMS'
-  const otpauthUri = generateURI({ issuer, label: rows[0].email, secret })
+  const otpauthUri = generateURI({ issuer: 'Plank CMS', label: rows[0].email, secret })
   res.json({ otpauthUri, secret })
 }
 
@@ -141,7 +145,8 @@ export async function verifyTwoFactorSetup(req: Request, res: Response): Promise
     `UPDATE plank_users
      SET two_factor_enabled = TRUE,
          two_factor_secret = two_factor_temp_secret,
-         two_factor_temp_secret = NULL
+         two_factor_temp_secret = NULL,
+         session_version = session_version + 1
      WHERE id = $1`,
     [req.user!.id],
   )
@@ -150,14 +155,14 @@ export async function verifyTwoFactorSetup(req: Request, res: Response): Promise
 }
 
 export async function disableTwoFactor(req: Request, res: Response): Promise<void> {
-  const parsed = TwoFactorCodeSchema.safeParse(req.body)
+  const parsed = DisableTwoFactorSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ errors: flattenError(parsed.error, (i) => i.message) })
     return
   }
 
-  const { rows } = await pool.query<{ two_factor_enabled: boolean; two_factor_secret: string | null }>(
-    'SELECT two_factor_enabled, two_factor_secret FROM plank_users WHERE id = $1',
+  const { rows } = await pool.query<{ two_factor_enabled: boolean; two_factor_secret: string | null; password: string }>(
+    'SELECT two_factor_enabled, two_factor_secret, password FROM plank_users WHERE id = $1',
     [req.user!.id],
   )
   const user = rows[0]
@@ -167,6 +172,11 @@ export async function disableTwoFactor(req: Request, res: Response): Promise<voi
   }
   if (!user.two_factor_enabled || !user.two_factor_secret) {
     res.status(400).json({ error: '2FA is not enabled' })
+    return
+  }
+  const passwordOk = await bcrypt.compare(parsed.data.password, user.password)
+  if (!passwordOk) {
+    res.status(401).json({ error: 'Current password is incorrect' })
     return
   }
 
@@ -183,7 +193,8 @@ export async function disableTwoFactor(req: Request, res: Response): Promise<voi
     `UPDATE plank_users
      SET two_factor_enabled = FALSE,
          two_factor_secret = NULL,
-         two_factor_temp_secret = NULL
+         two_factor_temp_secret = NULL,
+         session_version = session_version + 1
      WHERE id = $1`,
     [req.user!.id],
   )
@@ -301,7 +312,7 @@ export async function changePassword(req: Request, res: Response): Promise<void>
   if (!valid) { res.status(400).json({ error: 'Current password is incorrect' }); return }
 
   const hashed = await bcrypt.hash(parsed.data.newPassword, 12)
-  await pool.query('UPDATE plank_users SET password = $1 WHERE id = $2', [hashed, req.user!.id])
+  await pool.query('UPDATE plank_users SET password = $1, session_version = session_version + 1 WHERE id = $2', [hashed, req.user!.id])
   res.status(204).end()
 }
 

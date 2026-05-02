@@ -16,30 +16,26 @@ interface User {
 
 interface AuthState {
   user: User | null
-  token: string | null
   status: 'idle' | 'authenticated' | 'unauthenticated'
 }
 
 type AuthAction =
-  | { type: 'LOGIN'; payload: { user: User; token: string } }
+  | { type: 'LOGIN'; payload: { user: User } }
   | { type: 'LOGOUT' }
   | { type: 'UPDATE_USER'; payload: Partial<User> }
 
 interface AuthContextValue extends AuthState {
-  login: (user: User, token: string) => void
+  login: (user: User) => void
   logout: () => void
   updateUser: (patch: Partial<User>) => void
 }
 
-const TOKEN_KEY = 'plank_token'
-const USER_KEY = 'plank_user'
-
 function reducer(state: AuthState, action: AuthAction): AuthState {
   switch (action.type) {
     case 'LOGIN':
-      return { user: action.payload.user, token: action.payload.token, status: 'authenticated' }
+      return { user: action.payload.user, status: 'authenticated' }
     case 'LOGOUT':
-      return { user: null, token: null, status: 'unauthenticated' }
+      return { user: null, status: 'unauthenticated' }
     case 'UPDATE_USER':
       return { ...state, user: state.user ? { ...state.user, ...action.payload } : null }
   }
@@ -50,31 +46,41 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
     user: null,
-    token: null,
     status: 'idle',
   })
 
   useEffect(() => {
-    const token = localStorage.getItem(TOKEN_KEY)
-    const raw = localStorage.getItem(USER_KEY)
-    if (token && raw) {
-      try {
-        const user = JSON.parse(raw) as User
-        dispatch({ type: 'LOGIN', payload: { user, token } })
-        // Refresh profile data on startup — avatar URLs can expire and profile fields can change.
-        fetch('/cms/admin/users/me', { headers: { Authorization: `Bearer ${token}` } })
-          .then((r) => (r.ok ? r.json() : null))
-          .then((data: {
-            first_name?: string | null
-            last_name?: string | null
-            avatar_url?: string | null
-            job_title?: string | null
-            organization?: string | null
-            country?: string | null
-            two_factor_enabled?: boolean
-          } | null) => {
-            if (!data) return
-            const patch: Partial<User> = {
+    // Clear legacy token storage and bootstrap session from httpOnly cookie.
+    localStorage.removeItem('plank_token')
+    localStorage.removeItem('plank_user')
+
+    fetch('/cms/admin/users/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: {
+        id: string
+        email: string
+        role_id?: string
+        first_name?: string | null
+        last_name?: string | null
+        avatar_url?: string | null
+        job_title?: string | null
+        organization?: string | null
+        country?: string | null
+        permissions?: string[]
+        two_factor_enabled?: boolean
+      } | null) => {
+        if (!data) {
+          dispatch({ type: 'LOGOUT' })
+          return
+        }
+        dispatch({
+          type: 'LOGIN',
+          payload: {
+            user: {
+              id: data.id,
+              email: data.email,
+              role: 'unknown',
+              permissions: data.permissions ?? [],
               firstName: data.first_name ?? null,
               lastName: data.last_name ?? null,
               avatarUrl: data.avatar_url ?? null,
@@ -82,45 +88,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               organization: data.organization ?? null,
               country: data.country ?? null,
               twoFactorEnabled: data.two_factor_enabled ?? false,
-            }
-            dispatch({ type: 'UPDATE_USER', payload: patch })
-            const stored = localStorage.getItem(USER_KEY)
-            if (stored) {
-              localStorage.setItem(USER_KEY, JSON.stringify({ ...JSON.parse(stored), ...patch }))
-            }
-          })
-          .catch(() => {})
-      } catch {
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(USER_KEY)
-        dispatch({ type: 'LOGOUT' })
-      }
-    } else {
-      dispatch({ type: 'LOGOUT' })
-    }
+            },
+          },
+        })
+      })
+      .catch(() => dispatch({ type: 'LOGOUT' }))
   }, [])
 
-  function login(user: User, token: string) {
-    localStorage.setItem(TOKEN_KEY, token)
-    localStorage.setItem(USER_KEY, JSON.stringify(user))
-    dispatch({ type: 'LOGIN', payload: { user, token } })
+  function login(user: User) {
+    dispatch({ type: 'LOGIN', payload: { user } })
   }
 
   function logout() {
-    localStorage.removeItem(TOKEN_KEY)
-    localStorage.removeItem(USER_KEY)
+    fetch('/cms/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
     dispatch({ type: 'LOGOUT' })
   }
 
   function updateUser(patch: Partial<User>) {
     dispatch({ type: 'UPDATE_USER', payload: patch })
-    const raw = localStorage.getItem(USER_KEY)
-    if (raw) {
-      try {
-        const user = JSON.parse(raw) as User
-        localStorage.setItem(USER_KEY, JSON.stringify({ ...user, ...patch }))
-      } catch { /* ignore */ }
-    }
   }
 
   return <AuthContext.Provider value={{ ...state, login, logout, updateUser }}>{children}</AuthContext.Provider>

@@ -7,9 +7,17 @@ const TAG_LENGTH = 16
 
 function getKey(): Buffer | null {
   const raw = process.env.PLANK_ENCRYPTION_KEY
-  if (!raw) return null
+  if (!raw) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('PLANK_ENCRYPTION_KEY is required in production')
+    }
+    return null
+  }
   const buf = Buffer.from(raw, 'hex')
   if (buf.length !== KEY_LENGTH) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('PLANK_ENCRYPTION_KEY must be 64 hex chars (32 bytes) in production')
+    }
     console.warn('[plank] PLANK_ENCRYPTION_KEY must be 64 hex chars (32 bytes). Falling back to plaintext storage.')
     return null
   }

@@ -8,6 +8,19 @@ import adminRouter from './routes/admin.js'
 import publicRouter from './routes/public.js'
 import { errorHandler } from './middlewares/errorHandler.js'
 
+function assertSecurityEnv(): void {
+  if (process.env.NODE_ENV !== 'production') return
+
+  if (!process.env.PLANK_JWT_SECRET || process.env.PLANK_JWT_SECRET.length < 32) {
+    throw new Error('PLANK_JWT_SECRET is required in production and should be at least 32 characters.')
+  }
+  if (!process.env.PLANK_ENCRYPTION_KEY || process.env.PLANK_ENCRYPTION_KEY.length !== 64) {
+    throw new Error('PLANK_ENCRYPTION_KEY is required in production and must be 64 hex characters.')
+  }
+}
+
+assertSecurityEnv()
+
 const app: Express = express()
 
 app.use(helmet({

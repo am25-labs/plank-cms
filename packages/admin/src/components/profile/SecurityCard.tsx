@@ -29,6 +29,7 @@ export function SecurityCard() {
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
   const [setupData, setSetupData] = useState<TwoFactorSetupResponse | null>(null)
   const [otpCode, setOtpCode] = useState('')
+  const [disablePassword, setDisablePassword] = useState('')
 
   useEffect(() => {
     if (typeof user?.twoFactorEnabled === 'boolean') {
@@ -49,6 +50,7 @@ export function SecurityCard() {
   function closeTwoFactorSetup() {
     setSetupData(null)
     setOtpCode('')
+    setDisablePassword('')
   }
 
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
@@ -80,10 +82,14 @@ export function SecurityCard() {
   }
 
   async function handleDisable2FA() {
-    await request2FA('/cms/admin/users/me/2fa/disable', 'POST', { code: otpCode })
+    await request2FA('/cms/admin/users/me/2fa/disable', 'POST', {
+      code: otpCode,
+      password: disablePassword,
+    })
     setTwoFactorEnabled(false)
     updateUser({ twoFactorEnabled: false })
     setOtpCode('')
+    setDisablePassword('')
   }
 
   return (
@@ -206,7 +212,14 @@ export function SecurityCard() {
                     <p className="text-sm text-muted-foreground">
                       Enter a verification code from your authenticator app to disable 2FA.
                     </p>
-                    <Button variant="ghost" size="icon" onClick={() => setOtpCode('')}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setOtpCode('')
+                        setDisablePassword('')
+                      }}
+                    >
                       <XIcon className="size-4" />
                     </Button>
                   </div>
@@ -220,7 +233,17 @@ export function SecurityCard() {
                       <InputOTPSlot index={5} />
                     </InputOTPGroup>
                   </InputOTP>
-                  <Button variant="destructive" onClick={handleDisable2FA} disabled={loading2FA || otpCode.length !== 6}>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="disable-2fa-password">Current password</Label>
+                    <Input
+                      id="disable-2fa-password"
+                      type="password"
+                      value={disablePassword}
+                      onChange={(e) => setDisablePassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button variant="destructive" onClick={handleDisable2FA} disabled={loading2FA || otpCode.length !== 6 || !disablePassword}>
                     Disable 2FA
                   </Button>
                   {twoFaError && <p className="text-sm text-destructive">{twoFaError}</p>}
