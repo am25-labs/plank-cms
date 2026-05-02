@@ -46,7 +46,7 @@ type ContentType = {
   slug: string
   isDefault?: boolean
   name?: string
-  kind?: string
+  kind?: 'collection' | 'single'
   fields?: any[]
 }
 
@@ -56,6 +56,7 @@ function LayoutShell() {
   const navigate = useNavigate()
   const { content: secondaryPanel } = useSecondaryPanelContext()
   const { data: contentTypes } = useFetch<ContentType[]>('/cms/admin/content-types')
+  const collectionTypes = (contentTypes ?? []).filter((ct) => ct.kind === 'collection')
 
   function isActive(to: string) {
     return to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
@@ -80,21 +81,22 @@ function LayoutShell() {
           </NavLink>
 
           {/* New Entry */}
-          {(user?.permissions?.includes('*') || user?.permissions?.includes('entries:write')) && (
+          {(user?.permissions?.includes('*') || user?.permissions?.includes('entries:write')) &&
+            collectionTypes.length > 0 && (
             <div className="mt-4 px-3">
               <Button
                 size="icon"
                 onClick={() => {
-                  if (!contentTypes || contentTypes.length === 0) return
-                  const target = contentTypes.find((ct: any) => ct.isDefault) ?? contentTypes[0]
+                  const target =
+                    collectionTypes.find((ct) => ct.isDefault) ?? collectionTypes[0]
+                  if (!target) return
                   navigate(`/content/${target.slug}/new`)
                 }}
-                disabled={!contentTypes || contentTypes.length === 0}
               >
                 <PlusIcon className="size-4" />
               </Button>
             </div>
-          )}
+            )}
 
           {/* Nav */}
           <nav className="flex flex-1 flex-col items-center gap-1 pt-2">
