@@ -53,6 +53,7 @@ Recent history favors short, imperative commit messages (e.g. `Fix 2FA QR genera
 - If the user asks for help with commits, provide only: (1) a list of files and (2) suggested commit message(s) following the user's commit style.
 - If changes span multiple tasks, group files by task and propose one possible commit per group.
 - Commit assistance must always be provided as a list of suggested commits, each including the files that should be grouped together. This assistance should be automatically triggered when the user confirms a task is complete, and also whenever the user explicitly requests it.
+- Files included in commit suggestions must be exclusively those currently modified in the working tree (current `git status`).
 
 ## Shadcn Component Sourcing
 
