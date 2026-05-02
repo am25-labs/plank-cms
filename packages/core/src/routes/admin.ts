@@ -18,7 +18,7 @@ import {
   deleteEntry,
   patchEntryStatus,
 } from '../controllers/entries.js'
-import { listUsers, createUser, updateUser, deleteUser, getMe, updateMe, changePassword, uploadAvatar, deleteAvatar, presignAvatar, confirmAvatar, getTwoFactorStatus, startTwoFactorSetup, verifyTwoFactorSetup, disableTwoFactor } from '../controllers/users.js'
+import { listUsers, createUser, updateUser, deleteUser, getMe, updateMe, changePassword, uploadAvatar, deleteAvatar, presignAvatar, confirmAvatar, getTwoFactorStatus, startTwoFactorSetup, verifyTwoFactorSetup, disableTwoFactor, regenerateBackupCodes } from '../controllers/users.js'
 import { getUserPref, setUserPref } from '../controllers/userPrefs.js'
 import { listRoles, updateRole, resetRoles } from '../controllers/roles.js'
 import { listApiTokens, createApiToken, deleteApiToken } from '../controllers/apiTokens.js'
@@ -63,6 +63,7 @@ router.get('/users/me/2fa', getTwoFactorStatus)
 router.post('/users/me/2fa/setup', startTwoFactorSetup)
 router.post('/users/me/2fa/verify', verifyTwoFactorSetup)
 router.post('/users/me/2fa/disable', disableTwoFactor)
+router.post('/users/me/2fa/backup-codes/regenerate', regenerateBackupCodes)
 
 // Roles
 router.get('/roles', authorize('settings:users:read'), listRoles)

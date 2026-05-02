@@ -15,10 +15,14 @@ interface TwoFactorSetupResponse {
   secret: string
 }
 
+interface VerifyTwoFactorResponse {
+  backupCodes: string[]
+}
+
 export function SecurityCard() {
   const { user, updateUser, logout } = useAuth()
   const { loading: changingPw, error: pwError, request } = useApi()
-  const { loading: loading2FA, error: twoFaError, request: request2FA } = useApi<TwoFactorSetupResponse>()
+  const { loading: loading2FA, error: twoFaError, request: request2FA } = useApi()
 
   const [activeTab, setActiveTab] = useState<'' | 'password' | 'two-factor'>('')
   const [currentPassword, setCurrentPassword] = useState('')
@@ -31,6 +35,7 @@ export function SecurityCard() {
   const [otpCode, setOtpCode] = useState('')
   const [disablePassword, setDisablePassword] = useState('')
   const [justEnabled2FA, setJustEnabled2FA] = useState(false)
+  const [backupCodes, setBackupCodes] = useState<string[]>([])
 
   useEffect(() => {
     if (typeof user?.twoFactorEnabled === 'boolean') {
@@ -71,17 +76,18 @@ export function SecurityCard() {
   }
 
   async function handleStart2FA() {
-    const data = await request2FA('/cms/admin/users/me/2fa/setup', 'POST')
+    const data = await request2FA('/cms/admin/users/me/2fa/setup', 'POST') as TwoFactorSetupResponse
     setSetupData(data)
   }
 
   async function handleEnable2FA() {
-    await request2FA('/cms/admin/users/me/2fa/verify', 'POST', { code: otpCode })
+    const data = await request2FA('/cms/admin/users/me/2fa/verify', 'POST', { code: otpCode }) as VerifyTwoFactorResponse
     setTwoFactorEnabled(true)
     updateUser({ twoFactorEnabled: true })
     setSetupData(null)
     setOtpCode('')
     setJustEnabled2FA(true)
+    setBackupCodes(data.backupCodes ?? [])
   }
 
   async function handleDisable2FA() {
@@ -93,6 +99,7 @@ export function SecurityCard() {
     updateUser({ twoFactorEnabled: false })
     setOtpCode('')
     setDisablePassword('')
+    setBackupCodes([])
   }
 
   return (
@@ -225,6 +232,31 @@ export function SecurityCard() {
                       >
                         Re-login now
                       </Button>
+                      {backupCodes.length > 0 && (
+                        <div className="space-y-2 rounded-md border border-emerald-400/30 bg-background/40 p-3">
+                          <p className="text-xs font-medium text-emerald-200">
+                            Save these backup codes now. Each code can be used once if you lose access to your authenticator.
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            {backupCodes.map((code) => (
+                              <code
+                                key={code}
+                                className="rounded bg-black/20 px-2 py-1 text-xs text-emerald-100"
+                              >
+                                {code}
+                              </code>
+                            ))}
+                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              navigator.clipboard.writeText(backupCodes.join('\n')).catch(() => {})
+                            }}
+                          >
+                            Copy backup codes
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="flex items-center justify-between">

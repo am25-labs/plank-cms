@@ -37,6 +37,7 @@ export function Login() {
   const [validationError, setValidationError] = useState<string | null>(null)
   const [challengeToken, setChallengeToken] = useState<string | null>(null)
   const [otpCode, setOtpCode] = useState('')
+  const [backupCode, setBackupCode] = useState('')
 
   useEffect(() => {
     fetch('/cms/auth/setup')
@@ -58,7 +59,7 @@ export function Login() {
       if (challengeToken) {
         const verifyRes = await request('/cms/auth/login/2fa', 'POST', {
           challengeToken,
-          code: otpCode,
+          code: backupCode.trim() || otpCode,
         })
         if (!verifyRes.user) throw new Error('Invalid 2FA response')
         login(
@@ -80,6 +81,8 @@ export function Login() {
       const res = await request('/cms/auth/login', 'POST', { email, password })
       if (res.requiresTwoFactor && res.challengeToken) {
         setChallengeToken(res.challengeToken)
+        setOtpCode('')
+        setBackupCode('')
         return
       }
       if (!res.user) throw new Error('Invalid login response')
@@ -152,24 +155,35 @@ export function Login() {
               </div>
 
               {challengeToken && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Verification code</Label>
-                  <InputOTP
-                    maxLength={6}
-                    value={otpCode}
-                    onChange={setOtpCode}
-                    containerClassName="w-full justify-between"
-                  >
-                    <InputOTPGroup className="w-full justify-between">
-                      <InputOTPSlot index={0} className="w-11 flex-none" />
-                      <InputOTPSlot index={1} className="w-11 flex-none" />
-                      <InputOTPSlot index={2} className="w-11 flex-none" />
-                      <InputOTPSlot index={3} className="w-11 flex-none" />
-                      <InputOTPSlot index={4} className="w-11 flex-none" />
-                      <InputOTPSlot index={5} className="w-11 flex-none" />
-                    </InputOTPGroup>
-                  </InputOTP>
-                </div>
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Verification code</Label>
+                    <InputOTP
+                      maxLength={6}
+                      value={otpCode}
+                      onChange={setOtpCode}
+                      containerClassName="w-full justify-between"
+                    >
+                      <InputOTPGroup className="w-full justify-between">
+                        <InputOTPSlot index={0} className="w-11 flex-none" />
+                        <InputOTPSlot index={1} className="w-11 flex-none" />
+                        <InputOTPSlot index={2} className="w-11 flex-none" />
+                        <InputOTPSlot index={3} className="w-11 flex-none" />
+                        <InputOTPSlot index={4} className="w-11 flex-none" />
+                        <InputOTPSlot index={5} className="w-11 flex-none" />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="backup-code">Backup code (optional)</Label>
+                    <Input
+                      id="backup-code"
+                      placeholder="ABCD-EFGH"
+                      value={backupCode}
+                      onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                    />
+                  </div>
+                </>
               )}
 
               {needsSetup && (

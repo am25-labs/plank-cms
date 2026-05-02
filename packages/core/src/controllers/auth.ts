@@ -14,7 +14,7 @@ const LoginSchema = z.object({
 
 const Login2FASchema = z.object({
   challengeToken: z.string().min(1),
-  code: z.string().trim().length(6),
+  code: z.string().trim().min(6).max(16),
 })
 
 const RegisterSchema = z.object({
@@ -39,6 +39,7 @@ type UserRow = {
 }
 type CountRow = { count: string }
 type RoleRow = { id: string; name: string; permissions: string[] }
+type BackupCodeRow = { id: string; code_hash: string }
 
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 const LOGIN_RATE_LIMIT_MAX = 10
@@ -258,12 +259,35 @@ export async function loginWithTwoFactor(req: Request, res: Response): Promise<v
     return
   }
 
-  const result = verifySync({
-    token: parsed.data.code,
+  const submitted = parsed.data.code.trim().toUpperCase()
+  const normalizedBackup = submitted.replace(/[^A-Z0-9]/g, '')
+
+  let isValid = false
+  const totpResult = verifySync({
+    token: submitted,
     secret: decrypt(user.two_factor_secret),
   })
-  if (!result.valid) {
-    res.status(401).json({ error: 'Invalid verification code' })
+  if (totpResult.valid) {
+    isValid = true
+  } else if (normalizedBackup.length === 8) {
+    const { rows: backupRows } = await pool.query<BackupCodeRow>(
+      'SELECT id, code_hash FROM plank_user_backup_codes WHERE user_id = $1 AND used_at IS NULL',
+      [user.id],
+    )
+    for (const backupRow of backupRows) {
+      // eslint-disable-next-line no-await-in-loop
+      const match = await bcrypt.compare(normalizedBackup, backupRow.code_hash)
+      if (match) {
+        await pool.query('UPDATE plank_user_backup_codes SET used_at = NOW() WHERE id = $1', [
+          backupRow.id,
+        ])
+        isValid = true
+        break
+      }
+    }
+  }
+  if (!isValid) {
+    res.status(401).json({ error: 'Invalid verification or backup code' })
     return
   }
   await clearRateLimit('login-2fa', rateKey)
