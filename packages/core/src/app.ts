@@ -9,7 +9,8 @@ import publicRouter from './routes/public.js'
 import { errorHandler } from './middlewares/errorHandler.js'
 
 function assertSecurityEnv(): void {
-  if (process.env.NODE_ENV !== 'production') return
+  const isBundledRuntime = Boolean(process.env.PLANK_ADMIN_DIST)
+  if (!isBundledRuntime) return
 
   if (!process.env.PLANK_JWT_SECRET || process.env.PLANK_JWT_SECRET.length < 32) {
     throw new Error('PLANK_JWT_SECRET is required in production and should be at least 32 characters.')
@@ -36,8 +37,11 @@ app.use(express.json())
 
 // /cms/* is only accessible from the admin panel origin
 const PORT = process.env.PLANK_PORT ?? '5500'
-const adminOrigin = process.env.PLANK_PUBLIC_URL ?? `http://localhost:${PORT}`
-const cmsCorOptions = cors({ origin: adminOrigin, credentials: true })
+const isDev = !process.env.PLANK_ADMIN_DIST
+const coreBaseUrl = `http://localhost:${PORT}`
+const adminDevUrl = 'http://localhost:3000'
+const cmsAllowedOrigins = isDev ? [coreBaseUrl, adminDevUrl] : [coreBaseUrl]
+const cmsCorOptions = cors({ origin: cmsAllowedOrigins, credentials: true })
 
 app.use('/cms/auth', cmsCorOptions, authRouter)
 app.use('/cms/admin', cmsCorOptions, adminRouter)
@@ -45,16 +49,28 @@ app.use('/cms/admin', cmsCorOptions, adminRouter)
 // /api/* is public — any origin can consume it (headless CMS)
 app.use('/api', cors(), publicRouter)
 
-app.get('/', (_req, res) => res.redirect('/admin'))
+app.get('/', (_req, res) => {
+  if (isDev) {
+    res.redirect(adminDevUrl)
+    return
+  }
 
-// Serve admin panel static files in production.
-// PLANK_ADMIN_DIST is set by the CLI in the distributed package (bundled context).
-// Fallback resolves to packages/core/public/admin in the monorepo.
-const adminDist =
-  process.env.PLANK_ADMIN_DIST ??
-  join(dirname(fileURLToPath(import.meta.url)), '../public/admin')
-app.use('/admin', express.static(adminDist))
-app.get('/admin/*path', (_req, res) => res.sendFile(join(adminDist, 'index.html')))
+  res.redirect('/admin')
+})
+
+if (isDev) {
+  app.get('/admin/*path', (_req, res) => res.redirect(adminDevUrl))
+  app.get('/admin', (_req, res) => res.redirect(adminDevUrl))
+} else {
+  // Serve admin panel static files in production.
+  // PLANK_ADMIN_DIST is set by the CLI in the distributed package (bundled context).
+  // Fallback resolves to packages/core/public/admin in the monorepo.
+  const adminDist =
+    process.env.PLANK_ADMIN_DIST ??
+    join(dirname(fileURLToPath(import.meta.url)), '../public/admin')
+  app.use('/admin', express.static(adminDist))
+  app.get('/admin/*path', (_req, res) => res.sendFile(join(adminDist, 'index.html')))
+}
 
 app.use(errorHandler)
 
