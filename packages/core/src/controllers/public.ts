@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express'
 import { pool } from '@plank-cms/db'
 import { findContentTypeBySlug, assertSafeIdentifier } from '@plank-cms/schema'
-import type { ContentType } from '@plank-cms/schema'
+import type { ContentType, FieldDefinition } from '@plank-cms/schema'
 import { getProvider } from '../media/index.js'
 
 type SlugParam = RequestHandler<{ slug: string }>
@@ -39,6 +39,31 @@ function normalizeNavigationItems(value: unknown): unknown {
       if (key === 'label' || key === 'href' || key === 'items') continue
       normalized[key] = val
     }
+    return normalized
+  })
+}
+
+function normalizeArrayItemsBySchema(value: unknown, field: FieldDefinition): unknown {
+  if (field.type !== 'array' || !Array.isArray(value)) return value
+  const subFields = field.arrayFields ?? []
+  if (subFields.length === 0) return value
+
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return item
+    const raw = item as Record<string, unknown>
+    const normalized: Record<string, unknown> = {}
+
+    // Keep the same order as configured in the Content Type Builder
+    for (const subField of subFields) {
+      if (subField.name in raw) normalized[subField.name] = raw[subField.name]
+    }
+
+    // Preserve unknown keys after the defined schema keys
+    for (const [key, val] of Object.entries(raw)) {
+      if (key in normalized) continue
+      normalized[key] = val
+    }
+
     return normalized
   })
 }
@@ -245,10 +270,15 @@ function serializeEntry(
   const out: Record<string, unknown> = { id: row.id }
   for (const field of ct.fields) {
     if (!(field.name in effective)) continue
-    out[field.name] =
-      field.type === 'navigation'
-        ? normalizeNavigationItems(effective[field.name])
-        : effective[field.name]
+    if (field.type === 'navigation') {
+      out[field.name] = normalizeNavigationItems(effective[field.name])
+      continue
+    }
+    if (field.type === 'array') {
+      out[field.name] = normalizeArrayItemsBySchema(effective[field.name], field)
+      continue
+    }
+    out[field.name] = effective[field.name]
   }
   out.status = row.status
   out.published_at = row.published_at ?? null

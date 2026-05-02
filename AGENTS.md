@@ -64,3 +64,9 @@ Recent history favors short, imperative commit messages (e.g. `Fix 2FA QR genera
 - Never commit secrets; keep credentials in local `.env`.
 - Validate DB migrations against a non-production database before release.
 - For auth/security changes, verify JWT, 2FA, and role permissions end-to-end.
+
+## API Response Contract
+
+- Public API serialized entries must preserve deterministic key order:
+  - top-level: `id`, then content-type fields in the exact order defined in Content Type Builder, then system/meta fields;
+  - array item objects: sub-field keys in the exact order defined in the array field schema.
