@@ -6,6 +6,29 @@ interface JwtPayload {
   sub: string
   roleId: string
   sv?: number
+  type?: string
+}
+
+const ACCESS_TOKEN_COOKIE = 'plank_session'
+const REFRESH_TOKEN_COOKIE = 'plank_refresh'
+const ACCESS_TOKEN_EXPIRES_SECONDS = 60 * 60 * 24 * 30
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
+function setSessionCookie(res: Response, token: string): void {
+  res.cookie(ACCESS_TOKEN_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: ACCESS_TOKEN_EXPIRES_SECONDS * 1000,
+  })
+}
+
+function buildAccessToken(payload: { sub: string; roleId: string; sv: number }): string {
+  return jwt.sign(payload, process.env.PLANK_JWT_SECRET!, { expiresIn: '30d' })
 }
 
 function cookieValue(raw: string | undefined, key: string): string | null {
@@ -21,7 +44,8 @@ function cookieValue(raw: string | undefined, key: string): string | null {
 export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization
   const bearer = header?.startsWith('Bearer ') ? header.slice(7) : null
-  const cookieToken = cookieValue(req.headers.cookie, 'plank_session')
+  const cookieToken = cookieValue(req.headers.cookie, ACCESS_TOKEN_COOKIE)
+  const refreshToken = cookieValue(req.headers.cookie, REFRESH_TOKEN_COOKIE)
   const token = bearer ?? cookieToken
 
   if (!token) {
@@ -29,23 +53,58 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     return
   }
 
-  try {
-    const payload = jwt.verify(token, process.env.PLANK_JWT_SECRET!) as unknown as JwtPayload
+  async function validateSession(payload: JwtPayload): Promise<{ ok: boolean; sessionVersion?: number }> {
     if (typeof payload.sv !== 'number') {
-      res.status(401).json({ error: 'Invalid session token' })
-      return
+      return { ok: false }
     }
     const { rows } = await pool.query<{ session_version: number }>(
       'SELECT session_version FROM plank_users WHERE id = $1',
       [payload.sub],
     )
     if (!rows[0] || rows[0].session_version !== payload.sv) {
+      return { ok: false }
+    }
+    return { ok: true, sessionVersion: rows[0].session_version }
+  }
+
+  try {
+    const payload = jwt.verify(token, process.env.PLANK_JWT_SECRET!) as unknown as JwtPayload
+    const session = await validateSession(payload)
+    if (!session.ok) {
       res.status(401).json({ error: 'Session has been revoked' })
       return
     }
     req.user = { id: payload.sub, roleId: payload.roleId }
     next()
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' })
+    if (bearer || !refreshToken) {
+      res.status(401).json({ error: 'Invalid or expired token' })
+      return
+    }
+    try {
+      const refreshPayload = jwt.verify(refreshToken, process.env.PLANK_JWT_SECRET!) as JwtPayload
+      if (refreshPayload.type !== 'refresh') {
+        res.status(401).json({ error: 'Invalid or expired token' })
+        return
+      }
+      const session = await validateSession(refreshPayload)
+      if (!session.ok || typeof session.sessionVersion !== 'number') {
+        res.status(401).json({ error: 'Session has been revoked' })
+        return
+      }
+
+      const renewed = buildAccessToken({
+        sub: refreshPayload.sub,
+        roleId: refreshPayload.roleId,
+        sv: session.sessionVersion,
+      })
+      setSessionCookie(res, renewed)
+      req.user = { id: refreshPayload.sub, roleId: refreshPayload.roleId }
+      next()
+      return
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' })
+      return
+    }
   }
 }

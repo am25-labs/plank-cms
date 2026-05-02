@@ -46,12 +46,18 @@ const LOGIN_RATE_LIMIT_MAX = 10
 const LOGIN_2FA_RATE_LIMIT_MAX = 5
 
 const ACCESS_TOKEN_COOKIE = 'plank_session'
-const ACCESS_TOKEN_EXPIRES_SECONDS = 60 * 15
+const ACCESS_TOKEN_EXPIRES_SECONDS = 60 * 60 * 24 * 30
+const REFRESH_TOKEN_COOKIE = 'plank_refresh'
+const REFRESH_TOKEN_EXPIRES_SECONDS = 60 * 60 * 24 * 30
 
 type SessionJwtPayload = {
   sub: string
   roleId: string
   sv: number
+}
+
+type RefreshJwtPayload = SessionJwtPayload & {
+  type: 'refresh'
 }
 
 function isProduction(): boolean {
@@ -68,8 +74,27 @@ function setSessionCookie(res: Response, token: string): void {
   })
 }
 
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(REFRESH_TOKEN_COOKIE, token, {
+    httpOnly: true,
+    secure: isProduction(),
+    sameSite: 'lax',
+    path: '/',
+    maxAge: REFRESH_TOKEN_EXPIRES_SECONDS * 1000,
+  })
+}
+
 function clearSessionCookie(res: Response): void {
   res.clearCookie(ACCESS_TOKEN_COOKIE, {
+    httpOnly: true,
+    secure: isProduction(),
+    sameSite: 'lax',
+    path: '/',
+  })
+}
+
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie(REFRESH_TOKEN_COOKIE, {
     httpOnly: true,
     secure: isProduction(),
     sameSite: 'lax',
@@ -107,7 +132,12 @@ async function clearRateLimit(scope: string, rateKey: string): Promise<void> {
 }
 
 function buildAccessToken(payload: SessionJwtPayload): string {
-  return jwt.sign(payload, process.env.PLANK_JWT_SECRET!, { expiresIn: '15m' })
+  return jwt.sign(payload, process.env.PLANK_JWT_SECRET!, { expiresIn: '30d' })
+}
+
+function buildRefreshToken(payload: SessionJwtPayload): string {
+  const refreshPayload: RefreshJwtPayload = { ...payload, type: 'refresh' }
+  return jwt.sign(refreshPayload, process.env.PLANK_JWT_SECRET!, { expiresIn: '30d' })
 }
 
 function buildChallengeToken(payload: SessionJwtPayload & { twoFactor: true; jti: string }): string {
@@ -205,6 +235,10 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const auth = await buildAuthPayload(user)
   setSessionCookie(res, auth.token)
+  setRefreshCookie(
+    res,
+    buildRefreshToken({ sub: user.id, roleId: user.role_id, sv: user.session_version }),
+  )
 
   res.json({
     requiresTwoFactor: false,
@@ -294,6 +328,10 @@ export async function loginWithTwoFactor(req: Request, res: Response): Promise<v
 
   const auth = await buildAuthPayload(user)
   setSessionCookie(res, auth.token)
+  setRefreshCookie(
+    res,
+    buildRefreshToken({ sub: user.id, roleId: user.role_id, sv: user.session_version }),
+  )
 
   res.json({
     requiresTwoFactor: false,
@@ -326,6 +364,7 @@ export async function logout(req: Request, res: Response): Promise<void> {
   }
 
   clearSessionCookie(res)
+  clearRefreshCookie(res)
   // Cleanup best-effort for previous login keys from this client IP.
   const ip = req.ip ?? 'unknown'
   await pool.query('DELETE FROM plank_auth_rate_limits WHERE rate_key LIKE $1', [`${ip}:%`])
