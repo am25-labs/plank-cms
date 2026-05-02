@@ -154,14 +154,19 @@ export function Login() {
               {challengeToken && (
                 <div className="flex flex-col gap-1.5">
                   <Label>Verification code</Label>
-                  <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={setOtpCode}
+                    containerClassName="w-full justify-between"
+                  >
+                    <InputOTPGroup className="w-full justify-between">
+                      <InputOTPSlot index={0} className="w-11 flex-none" />
+                      <InputOTPSlot index={1} className="w-11 flex-none" />
+                      <InputOTPSlot index={2} className="w-11 flex-none" />
+                      <InputOTPSlot index={3} className="w-11 flex-none" />
+                      <InputOTPSlot index={4} className="w-11 flex-none" />
+                      <InputOTPSlot index={5} className="w-11 flex-none" />
                     </InputOTPGroup>
                   </InputOTP>
                 </div>
