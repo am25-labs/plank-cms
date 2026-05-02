@@ -464,22 +464,12 @@ function ConfigureViewDialog({
 
   const hidden = allFields.filter((f) => !visible.some((v) => v.split('.')[0] === f.name))
 
-  function setFieldSub(baseName: string, sub?: string) {
-    setVisible((prev) =>
-      prev.map((v) => {
-        const parts = v.split('.')
-        if (parts[0] !== baseName) return v
-        return sub ? `${baseName}.${sub}` : baseName
-      }),
-    )
-  }
-
   function RelationFieldSelector({ fieldName }: { fieldName: string }) {
     const base = fieldName.split('.')[0]
     const field = allFields.find((f) => f.name === base)
     const relatedSlug = field?.relatedSlug
 
-    const { data: relatedCt } = useFetch<any>(
+    const { data: relatedCt } = useFetch<ContentType>(
       relatedSlug ? `/cms/admin/content-types/${relatedSlug}` : null,
     )
 
@@ -501,8 +491,7 @@ function ConfigureViewDialog({
       if (selectedSub) return
 
       const preferred = ['title', 'name']
-      const found =
-        relatedCt.fields.find((f: any) => preferred.includes(f.name)) || relatedCt.fields[0]
+      const found = relatedCt.fields.find((f) => preferred.includes(f.name)) || relatedCt.fields[0]
 
       if (found) {
         setFieldSub(base, found.name)
@@ -518,7 +507,7 @@ function ConfigureViewDialog({
         </SelectTrigger>
 
         <SelectContent>
-          {relatedCt.fields.map((rf: any) => (
+          {relatedCt.fields.map((rf) => (
             <SelectItem key={rf.name} value={rf.name}>
               {rf.name}
             </SelectItem>
@@ -878,8 +867,6 @@ export function EntriesList() {
 
   if (!ct) return null
 
-  const visibleFields = columns.map((c) => c.field)
-
   const totalPages = Math.ceil((entries?.total ?? 0) / (entries?.limit ?? 20))
 
   return (
@@ -1015,9 +1002,12 @@ export function EntriesList() {
                           value = rawValue
                         } else if (col.displayField) {
                           if (rawValue && typeof rawValue === 'object') {
-                            value = (rawValue as Record<string, any>)[col.displayField]
+                            value = (rawValue as Record<string, unknown>)[col.displayField]
                           } else {
-                            value = (rawValue as any)?.title ?? rawValue
+                            value =
+                              rawValue && typeof rawValue === 'object'
+                                ? (rawValue as Record<string, unknown>).title
+                                : rawValue
                           }
                         }
 

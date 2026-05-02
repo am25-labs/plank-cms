@@ -47,7 +47,7 @@ type ContentType = {
   isDefault?: boolean
   name?: string
   kind?: 'collection' | 'single'
-  fields?: any[]
+  fields?: unknown[]
 }
 
 function LayoutShell() {

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
-import { PlusIcon, Trash2Icon, WebhookIcon } from 'lucide-react'
+import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner.tsx'
 import { useAuth } from '@/context/auth.tsx'
 import { useFetch } from '@/hooks/useFetch.ts'

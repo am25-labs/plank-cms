@@ -12,7 +12,6 @@ import { PencilIcon, XIcon, CameraIcon, Trash2Icon } from 'lucide-react'
 import { uploadAvatarFile } from '@/lib/uploadMedia.ts'
 
 type MeResponse = { first_name: string | null; last_name: string | null; avatar_url: string | null; job_title: string | null; organization: string | null; country: string | null }
-type AvatarResponse = { avatarUrl: string }
 
 
 export function AccountCard() {

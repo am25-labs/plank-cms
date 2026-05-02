@@ -1764,13 +1764,17 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
   useEffect(() => {
     if (field.type !== 'uid' || !field.targetField || uidManual.current) return
 
-    const meta: any = allValues as any
+    const meta = allValues as Record<string, unknown> & {
+      __localizationEnabled?: unknown
+      __defaultLocale?: unknown
+      localized?: unknown
+    }
     const target = field.targetField
 
     const localizationEnabled = Boolean(meta.__localizationEnabled)
 
     // Prefer top-level (non-localized) value
-    const topValue = (allValues as any)[target]
+    const topValue = meta[target]
     if (topValue !== undefined && topValue !== null && String(topValue).trim() !== '') {
       onChange(toSlug(String(topValue)))
       return
@@ -1779,18 +1783,23 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
     // If localization is enabled and there's no top-level value, attempt to use
     // the value from the default locale only. If that's absent, do not auto-generate.
     const localized =
-      (allValues as any).localized && typeof (allValues as any).localized === 'object'
-        ? (allValues as any).localized
+      meta.localized && typeof meta.localized === 'object'
+        ? (meta.localized as Record<string, unknown>)
         : {}
     if (localizationEnabled) {
-      const defaultLocale = (allValues as any).__defaultLocale as string | undefined
-      if (
+      const defaultLocale = typeof meta.__defaultLocale === 'string' ? meta.__defaultLocale : undefined
+      const defaultLocaleValues =
         defaultLocale &&
         localized[defaultLocale] &&
-        localized[defaultLocale][target] !== undefined &&
-        String(localized[defaultLocale][target]).trim() !== ''
+        typeof localized[defaultLocale] === 'object'
+          ? (localized[defaultLocale] as Record<string, unknown>)
+          : null
+      if (
+        defaultLocaleValues &&
+        defaultLocaleValues[target] !== undefined &&
+        String(defaultLocaleValues[target]).trim() !== ''
       ) {
-        onChange(toSlug(String(localized[defaultLocale][target])))
+        onChange(toSlug(String(defaultLocaleValues[target])))
       }
       return
     }
@@ -1799,21 +1808,28 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
     // (rare case for legacy data), but this is secondary to top-level.
     const keys = Object.keys(localized).filter((k) => !k.startsWith('_'))
     for (const k of keys) {
+      const localeValues =
+        localized[k] && typeof localized[k] === 'object'
+          ? (localized[k] as Record<string, unknown>)
+          : null
       if (
-        localized[k] &&
-        localized[k][target] !== undefined &&
-        String(localized[k][target]).trim() !== ''
+        localeValues &&
+        localeValues[target] !== undefined &&
+        String(localeValues[target]).trim() !== ''
       ) {
-        onChange(toSlug(String(localized[k][target])))
+        onChange(toSlug(String(localeValues[target])))
         return
       }
     }
   }, [
     field.type,
     field.targetField,
-    (allValues as any)[field.targetField ?? ''],
-    JSON.stringify((allValues as any).localized ?? {}),
-    (allValues as any).__localizationEnabled,
+    allValues[field.targetField ?? ''],
+    JSON.stringify(
+      (allValues as Record<string, unknown> & { localized?: unknown }).localized ?? {},
+    ),
+    (allValues as Record<string, unknown> & { __localizationEnabled?: unknown })
+      .__localizationEnabled,
   ])
 
   const sharedClass = 'w-full'

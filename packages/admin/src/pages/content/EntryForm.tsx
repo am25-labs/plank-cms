@@ -9,7 +9,7 @@ import { useSettings } from '@/context/settings.tsx'
 import { useAuth } from '@/context/auth.tsx'
 import { Button } from '@/components/ui/button.tsx'
 import { Input } from '@/components/ui/input.tsx'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.tsx'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs.tsx'
 import { Switch } from '@/components/ui/switch.tsx'
 import { Label } from '@/components/ui/label.tsx'
 import { Spinner } from '@/components/ui/spinner.tsx'
@@ -42,6 +42,9 @@ type Entry = Record<string, unknown> & {
   published_data?: Record<string, unknown> | null
   scheduled_for?: string | null
 }
+
+type LocalizedMeta = { enabled?: boolean; primary?: string }
+type LocalizedData = Record<string, unknown> & { _meta?: LocalizedMeta }
 
 function stableValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stableValue)
@@ -123,14 +126,13 @@ export function EntryForm() {
     })
     // localized values
     // normalize to a plain object so TS doesn't treat it as `unknown`
-    const rawLocalized = (existing as any).localized
-    const localizedObj: Record<string, any> =
-      rawLocalized && typeof rawLocalized === 'object' ? rawLocalized : {}
+    const rawLocalized = existing.localized
+    const localizedObj: LocalizedData =
+      rawLocalized && typeof rawLocalized === 'object' ? (rawLocalized as LocalizedData) : {}
     initial.localized = localizedObj
     const detectedLocales = Object.keys(localizedObj).filter((k) => !k.startsWith('_'))
     const meta = localizedObj._meta || {}
     const enabled = meta.enabled ?? detectedLocales.length > 0
-    const primary = meta.primary ?? detectedLocales[0] ?? defaultLocale ?? 'en'
     if (detectedLocales.length > 0) {
       setLocales(detectedLocales)
       setActiveLocale(detectedLocales[0])
@@ -194,40 +196,57 @@ export function EntryForm() {
   }
 
   function handleLocalizedChange(locale: string, name: string, value: unknown) {
-    setValues((prev: any) => {
-      const next: any = { ...(prev || {}) }
-      if (!next.localized || typeof next.localized !== 'object') next.localized = {}
-      next.localized[locale] = { ...(next.localized[locale] || {}) }
-      next.localized[locale][name] = value
+    setValues((prev) => {
+      const next: Record<string, unknown> = { ...prev }
+      const localized: LocalizedData =
+        next.localized && typeof next.localized === 'object'
+          ? (next.localized as LocalizedData)
+          : {}
+      const localeBucket =
+        localized[locale] && typeof localized[locale] === 'object'
+          ? (localized[locale] as Record<string, unknown>)
+          : {}
+      localeBucket[name] = value
+      localized[locale] = localeBucket
+      next.localized = localized
       return next
     })
   }
 
   function toggleLocalization(enabled: boolean) {
     setLocalizationEnabled(enabled)
-    setValues((prev: any) => {
-      const next: any = { ...(prev || {}) }
-      if (!next.localized || typeof next.localized !== 'object') next.localized = {}
-      if (!next.localized._meta) next.localized._meta = {}
+    setValues((prev) => {
+      const next: Record<string, unknown> = { ...prev }
+      const localized: LocalizedData =
+        next.localized && typeof next.localized === 'object'
+          ? (next.localized as LocalizedData)
+          : {}
+      if (!localized._meta) localized._meta = {}
       if (enabled && defaultLocale) {
         // Enabling: if no localized bucket for defaultLocale, copy top-level values into it
-        if (!next.localized[defaultLocale]) {
-          next.localized[defaultLocale] = {}
+        const existingDefault =
+          localized[defaultLocale] && typeof localized[defaultLocale] === 'object'
+            ? (localized[defaultLocale] as Record<string, unknown>)
+            : null
+        if (!existingDefault) {
+          localized[defaultLocale] = {}
           if (ct && ct.fields) {
+            const defaultBucket = localized[defaultLocale] as Record<string, unknown>
             ct.fields.forEach((f) => {
               if (['string', 'text', 'richtext'].includes(f.type)) {
                 const v = next[f.name]
-                if (v !== undefined && v !== null && v !== '')
-                  next.localized[defaultLocale][f.name] = v
+                if (v !== undefined && v !== null && v !== '') defaultBucket[f.name] = v
               }
             })
           }
         }
-        next.localized._meta.primary = defaultLocale
+        localized._meta.primary = defaultLocale
       } else if (!enabled && defaultLocale) {
         // Disabling: copy values from localized[defaultLocale] back to top-level fields
         const src =
-          next.localized && next.localized[defaultLocale] ? next.localized[defaultLocale] : null
+          localized[defaultLocale] && typeof localized[defaultLocale] === 'object'
+            ? (localized[defaultLocale] as Record<string, unknown>)
+            : null
         if (src && ct && ct.fields) {
           ct.fields.forEach((f) => {
             if (['string', 'text', 'richtext', 'uid'].includes(f.type)) {
@@ -237,7 +256,8 @@ export function EntryForm() {
           })
         }
       }
-      next.localized._meta.enabled = enabled
+      localized._meta.enabled = enabled
+      next.localized = localized
       return next
     })
   }
@@ -264,12 +284,13 @@ export function EntryForm() {
       localizationEnabled &&
       values.localized &&
       typeof values.localized === 'object' &&
-      (values.localized as Record<string, any>)[defaultLocale]
-        ? ((values.localized as Record<string, any>)[defaultLocale] as Record<string, unknown>)
+      (values.localized as LocalizedData)[defaultLocale] &&
+      typeof (values.localized as LocalizedData)[defaultLocale] === 'object'
+        ? ((values.localized as LocalizedData)[defaultLocale] as Record<string, unknown>)
         : null
 
     ct.fields.forEach((f) => {
-      let v = (values as any)[f.name]
+      let v = values[f.name]
       if (
         (v === undefined || v === null || v === '') &&
         localizedDefault &&
@@ -286,14 +307,11 @@ export function EntryForm() {
     // Include localized object when present
     if (values.localized && Object.keys(values.localized as Record<string, unknown>).length > 0) {
       // ensure meta
-      // @ts-expect-error: Nested locale objects are dynamic at runtime.
-      if (!values.localized._meta) values.localized._meta = {}
-      // @ts-expect-error: Nested locale objects are dynamic at runtime.
-      values.localized._meta.enabled = localizationEnabled
-      // @ts-expect-error: Nested locale objects are dynamic at runtime.
-      values.localized._meta.primary = defaultLocale
-      // @ts-expect-error: Nested locale objects are dynamic at runtime.
-      body.localized = values.localized
+      const localized = values.localized as LocalizedData
+      if (!localized._meta) localized._meta = {}
+      localized._meta.enabled = localizationEnabled
+      localized._meta.primary = defaultLocale
+      body.localized = localized
     }
 
     try {
@@ -606,8 +624,10 @@ export function EntryForm() {
           {ct.fields.map((field) => {
             const isLocalizable = ['string', 'text', 'richtext'].includes(field.type)
             const localizedValue =
-              values.localized && (values.localized as any)[activeLocale]
-                ? (values.localized as any)[activeLocale][field.name]
+              values.localized && (values.localized as LocalizedData)[activeLocale]
+                ? ((values.localized as LocalizedData)[activeLocale] as Record<string, unknown>)[
+                    field.name
+                  ]
                 : undefined
             const renderValue =
               isLocalizable && localizationEnabled ? localizedValue : values[field.name]

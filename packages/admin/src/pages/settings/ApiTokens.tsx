@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, Trash2Icon, CopyIcon, CheckIcon } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner.tsx'
