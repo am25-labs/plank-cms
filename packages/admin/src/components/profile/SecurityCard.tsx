@@ -199,8 +199,14 @@ export function SecurityCard() {
                     <QRCodeSVG value={setupData.otpauthUri} size={176} />
                   </div>
                   <p className="text-xs text-muted-foreground">Manual code: {setupData.secret}</p>
-                  <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
-                    <InputOTPGroup>
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={setOtpCode}
+                    containerClassName="w-fit"
+                    className="w-fit"
+                  >
+                    <InputOTPGroup className="w-fit">
                       <InputOTPSlot index={0} />
                       <InputOTPSlot index={1} />
                       <InputOTPSlot index={2} />
@@ -274,8 +280,14 @@ export function SecurityCard() {
                       <XIcon className="size-4" />
                     </Button>
                   </div>
-                  <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
-                    <InputOTPGroup>
+                  <InputOTP
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={setOtpCode}
+                    containerClassName="w-fit"
+                    className="w-fit"
+                  >
+                    <InputOTPGroup className="w-fit">
                       <InputOTPSlot index={0} />
                       <InputOTPSlot index={1} />
                       <InputOTPSlot index={2} />
