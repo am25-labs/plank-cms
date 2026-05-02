@@ -100,10 +100,10 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
 }
 
 export async function getMe(req: Request, res: Response): Promise<void> {
-  const { rows } = await pool.query<UserRow & { permissions: string[] }>(
+  const { rows } = await pool.query<UserRow & { permissions: string[]; role_name: string }>(
     `SELECT u.id, u.email, u.role_id, u.first_name, u.last_name, u.avatar_url,
             u.job_title, u.organization, u.country, u.two_factor_enabled, u.created_at,
-            r.permissions
+            r.name AS role_name, r.permissions
      FROM plank_users u
      JOIN plank_roles r ON r.id = u.role_id
      WHERE u.id = $1`,
@@ -111,7 +111,12 @@ export async function getMe(req: Request, res: Response): Promise<void> {
   )
   if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
   const resolved = await resolveAvatarUrl(rows[0])
-  res.json({ ...resolved, permissions: rows[0].permissions, two_factor_enabled: rows[0].two_factor_enabled })
+  res.json({
+    ...resolved,
+    role: rows[0].role_name,
+    permissions: rows[0].permissions,
+    two_factor_enabled: rows[0].two_factor_enabled,
+  })
 }
 
 export async function getTwoFactorStatus(req: Request, res: Response): Promise<void> {

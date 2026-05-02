@@ -59,6 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((data: {
         id: string
         email: string
+        role?: string
+        role_name?: string
         role_id?: string
         first_name?: string | null
         last_name?: string | null
@@ -79,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user: {
               id: data.id,
               email: data.email,
-              role: 'unknown',
+              role: data.role ?? data.role_name ?? 'unknown',
               permissions: data.permissions ?? [],
               firstName: data.first_name ?? null,
               lastName: data.last_name ?? null,
