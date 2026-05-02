@@ -101,6 +101,13 @@ const ARRAY_SUBFIELD_OPTIONS: ArraySubTypeOption[] = [
     bg: 'bg-amber-50',
   },
   { type: 'media', icon: ImageIcon, label: 'Media', color: 'text-rose-600', bg: 'bg-rose-50' },
+  {
+    type: 'mixed',
+    icon: LayoutListIcon,
+    label: 'Mixed Value',
+    color: 'text-fuchsia-600',
+    bg: 'bg-fuchsia-50',
+  },
 ]
 
 const SUBFIELD_DEFAULT_WIDTH: Record<ArraySubFieldType, FieldWidth> = {
@@ -111,6 +118,7 @@ const SUBFIELD_DEFAULT_WIDTH: Record<ArraySubFieldType, FieldWidth> = {
   boolean: 'third',
   datetime: 'half',
   media: 'half',
+  mixed: 'half',
 }
 
 const EMPTY_SUBFIELD_DRAFT: ArraySubFieldDraft = {
@@ -737,7 +745,7 @@ export function AddFieldDialog({
                       const SfIcon = opt?.icon ?? TypeIcon
                       return (
                         <div
-                          key={`${sf.name}-${index}`}
+                          key={`subfield-${index}`}
                           className={`${FIELD_WIDTH_SPAN[sf.width ?? 'full']} flex items-center gap-1.5 rounded-md border border-dashed border-border p-2`}
                         >
                           <div

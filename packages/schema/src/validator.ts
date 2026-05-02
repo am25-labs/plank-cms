@@ -3,6 +3,20 @@ import { type ContentType, ValidationError } from './types.js'
 const MAX_NAVIGATION_DEPTH = 3
 const MAX_NAVIGATION_ITEMS_PER_LEVEL = 20
 
+type MixedArrayValue =
+  | { kind: 'string'; value: string }
+  | { kind: 'number'; value: number }
+  | { kind: 'boolean'; value: boolean }
+
+function isMixedArrayValue(value: unknown): value is MixedArrayValue {
+  if (typeof value !== 'object' || value === null) return false
+  const v = value as Record<string, unknown>
+  if (v.kind === 'string') return typeof v.value === 'string'
+  if (v.kind === 'number') return typeof v.value === 'number' && !isNaN(v.value)
+  if (v.kind === 'boolean') return typeof v.value === 'boolean'
+  return false
+}
+
 function validateNavigationItems(
   value: unknown,
   fieldName: string,
@@ -133,6 +147,38 @@ export function validate(
               const subEmpty = subValue === undefined || subValue === null || subValue === ''
               if (subField.required && subEmpty) {
                 errors.push(`Field "${field.name}[${i}].${subField.name}" is required`)
+                continue
+              }
+              if (subEmpty) continue
+
+              if (subField.type === 'string' || subField.type === 'text' || subField.type === 'richtext') {
+                if (typeof subValue !== 'string') {
+                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be a string`)
+                }
+              } else if (subField.type === 'number') {
+                if (typeof subValue !== 'number' || isNaN(subValue)) {
+                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be a number`)
+                } else if (subField.subtype !== 'float' && !Number.isInteger(subValue)) {
+                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be an integer`)
+                }
+              } else if (subField.type === 'boolean') {
+                if (typeof subValue !== 'boolean') {
+                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be a boolean`)
+                }
+              } else if (subField.type === 'datetime') {
+                if (!(subValue instanceof Date) && isNaN(Date.parse(String(subValue)))) {
+                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be a valid date`)
+                }
+              } else if (subField.type === 'media') {
+                if (typeof subValue !== 'string' || !subValue.trim()) {
+                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be a non-empty string URL`)
+                }
+              } else if (subField.type === 'mixed') {
+                if (!isMixedArrayValue(subValue)) {
+                  errors.push(
+                    `Field "${field.name}[${i}].${subField.name}" must be a mixed value object with kind/value`,
+                  )
+                }
               }
             }
           }

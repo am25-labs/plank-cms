@@ -77,6 +77,7 @@ type ArraySubFieldType =
   | 'boolean'
   | 'datetime'
   | 'media'
+  | 'mixed'
 type ArraySubField = {
   name: string
   type: ArraySubFieldType
@@ -85,6 +86,9 @@ type ArraySubField = {
   allowedTypes?: ('image' | 'video' | 'audio' | 'document')[]
   width?: string
 }
+
+type MixedValueKind = 'string' | 'number' | 'boolean'
+type MixedValue = { kind: MixedValueKind; value: string | number | boolean }
 
 export type FieldDef = {
   name: string
@@ -119,6 +123,12 @@ const ACCEPT_MAP: Record<string, string> = {
 function buildAccept(allowedTypes?: FieldDef['allowedTypes']): string {
   if (!allowedTypes || allowedTypes.length === 0) return '*/*'
   return allowedTypes.map((t) => ACCEPT_MAP[t]).join(',')
+}
+
+function toFieldPlaceholder(name: string): string {
+  const withSpaces = name.replace(/_/g, ' ').trim()
+  if (!withSpaces) return 'Value'
+  return withSpaces.charAt(0).toUpperCase() + withSpaces.slice(1)
 }
 
 type MediaItem = {
@@ -760,6 +770,102 @@ function FloatInput({
       onChange={handleChange}
       disabled={disabled}
     />
+  )
+}
+
+function normalizeMixedValue(value: unknown): MixedValue {
+  if (typeof value === 'object' && value !== null) {
+    const v = value as Record<string, unknown>
+    if (v.kind === 'string' && typeof v.value === 'string') return { kind: 'string', value: v.value }
+    if (v.kind === 'number' && typeof v.value === 'number' && !isNaN(v.value)) {
+      return { kind: 'number', value: v.value }
+    }
+    if (v.kind === 'boolean' && typeof v.value === 'boolean') {
+      return { kind: 'boolean', value: v.value }
+    }
+  }
+  if (typeof value === 'number' && !isNaN(value)) return { kind: 'number', value }
+  if (typeof value === 'boolean') return { kind: 'boolean', value }
+  return { kind: 'string', value: typeof value === 'string' ? value : '' }
+}
+
+function MixedInput({
+  value,
+  onChange,
+  inputId,
+  disabled = false,
+}: {
+  value: unknown
+  onChange: (v: unknown) => void
+  inputId: string
+  disabled?: boolean
+}) {
+  const normalized = normalizeMixedValue(value)
+
+  function setKind(kind: MixedValueKind) {
+    if (kind === 'string') onChange({ kind, value: '' })
+    if (kind === 'number') onChange({ kind, value: 0 })
+    if (kind === 'boolean') onChange({ kind, value: false })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="inline-flex items-center gap-1 rounded-md border border-border p-1">
+        {(['string', 'number', 'boolean'] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            disabled={disabled}
+            onClick={() => setKind(kind)}
+            className={cn(
+              'rounded px-2 py-1 text-xs transition-colors',
+              normalized.kind === kind
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent/60',
+            )}
+          >
+            {kind === 'string' ? 'Text' : kind === 'number' ? 'Number' : 'Boolean'}
+          </button>
+        ))}
+      </div>
+
+      {normalized.kind === 'string' && (
+        <Input
+          className={cn('w-full', 'text-base md:text-base')}
+          value={String(normalized.value)}
+          placeholder="Value"
+          onChange={(e) => onChange({ kind: 'string', value: e.target.value })}
+          disabled={disabled}
+        />
+      )}
+
+      {normalized.kind === 'number' && (
+        <FloatInput
+          value={normalized.value}
+          onChange={(v) =>
+            onChange({
+              kind: 'number',
+              value: typeof v === 'number' && !isNaN(v) ? v : 0,
+            })
+          }
+          disabled={disabled}
+        />
+      )}
+
+      {normalized.kind === 'boolean' && (
+        <div className="flex items-center gap-2 pt-1">
+          <Checkbox
+            id={inputId}
+            checked={Boolean(normalized.value)}
+            onCheckedChange={(v) => onChange({ kind: 'boolean', value: Boolean(v) })}
+            disabled={disabled}
+          />
+          <Label htmlFor={inputId} className="cursor-pointer font-normal text-base">
+            {normalized.value ? 'True' : 'False'}
+          </Label>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1737,7 +1843,7 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
       <Textarea
         className={cn(sharedClass, 'text-base')}
         value={String(value ?? '')}
-        placeholder={field.name}
+        placeholder={toFieldPlaceholder(field.name)}
         onChange={(e) => onChange(e.target.value)}
         disabled={Boolean(disabled)}
       />
@@ -1837,6 +1943,17 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
     )
   }
 
+  if ((field as { type: string }).type === 'mixed') {
+    return (
+      <MixedInput
+        value={value}
+        onChange={onChange}
+        inputId={`field-${field.name}-mixed-boolean`}
+        disabled={Boolean(disabled)}
+      />
+    )
+  }
+
   if (field.type === 'navigation') {
     return <NavigationInput value={value} onChange={onChange} disabled={Boolean(disabled)} />
   }
@@ -1846,7 +1963,7 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
     <Input
       className={cn(sharedClass, 'text-base md:text-base')}
       value={String(value ?? '')}
-      placeholder={field.name}
+      placeholder={toFieldPlaceholder(field.name)}
       onChange={(e) => onChange(e.target.value)}
       disabled={Boolean(disabled)}
     />

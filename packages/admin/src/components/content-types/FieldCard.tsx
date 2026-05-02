@@ -43,6 +43,7 @@ export type ArraySubFieldType =
   | 'boolean'
   | 'datetime'
   | 'media'
+  | 'mixed'
 export type ArraySubField = {
   name: string
   type: ArraySubFieldType
@@ -74,7 +75,7 @@ type FieldMeta = {
   bg: string
 }
 
-function getFieldMeta(type: FieldType, subtype?: NumberSubtype): FieldMeta {
+function getFieldMeta(type: FieldType | ArraySubFieldType, subtype?: NumberSubtype): FieldMeta {
   switch (type) {
     case 'string':
       return { icon: TypeIcon, label: 'Text (string)', color: 'text-blue-600', bg: 'bg-blue-50' }
@@ -115,6 +116,8 @@ function getFieldMeta(type: FieldType, subtype?: NumberSubtype): FieldMeta {
       }
     case 'media':
       return { icon: ImageIcon, label: 'Media', color: 'text-rose-600', bg: 'bg-rose-50' }
+    case 'mixed':
+      return { icon: LayoutListIcon, label: 'Mixed value', color: 'text-fuchsia-600', bg: 'bg-fuchsia-50' }
     case 'media-gallery':
       return {
         icon: LayoutGridIcon,

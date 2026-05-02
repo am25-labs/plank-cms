@@ -104,7 +104,7 @@ const RESERVED_SQL_IDENTIFIERS = new Set([
 
 const ArraySubFieldSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]*$/, 'Sub-field name must be lowercase with underscores'),
-  type: z.enum(['string', 'text', 'richtext', 'number', 'boolean', 'datetime', 'media']),
+  type: z.enum(['string', 'text', 'richtext', 'number', 'boolean', 'datetime', 'media', 'mixed']),
   required: z.boolean().optional(),
   subtype: z.enum(['integer', 'float']).optional(),
   allowedTypes: z.array(z.enum(['image', 'video', 'audio', 'document'])).optional(),

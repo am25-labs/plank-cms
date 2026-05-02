@@ -20,6 +20,7 @@ export type ArraySubFieldType =
   | 'boolean'
   | 'datetime'
   | 'media'
+  | 'mixed'
 
 export type NumberSubtype = 'integer' | 'float'
 
