@@ -2,7 +2,6 @@ import type { Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import { pool, createId } from '@plank-cms/db'
 import { generateSecret, generateURI, verifySync } from 'otplib'
-import QRCode from 'qrcode'
 import { z, flattenError } from 'zod'
 import { getProvider } from '../media/index.js'
 import { decrypt, encrypt } from '../lib/encrypt.js'
@@ -112,8 +111,7 @@ export async function startTwoFactorSetup(req: Request, res: Response): Promise<
 
   const issuer = process.env.PLANK_2FA_ISSUER || 'Plank CMS'
   const otpauthUri = generateURI({ issuer, label: rows[0].email, secret })
-  const qrCodeDataUrl = await QRCode.toDataURL(otpauthUri)
-  res.json({ otpauthUri, qrCodeDataUrl, secret })
+  res.json({ otpauthUri, secret })
 }
 
 export async function verifyTwoFactorSetup(req: Request, res: Response): Promise<void> {

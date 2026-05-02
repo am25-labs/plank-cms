@@ -7,10 +7,11 @@ import { Label } from '@/components/ui/label.tsx'
 import { Card, CardHeader, CardTitle, CardContent, CardAction } from '@/components/ui/card.tsx'
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp.tsx'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs.tsx'
+import { QRCodeSVG } from 'qrcode.react'
 import { XIcon } from 'lucide-react'
 
 interface TwoFactorSetupResponse {
-  qrCodeDataUrl: string
+  otpauthUri: string
   secret: string
 }
 
@@ -178,7 +179,9 @@ export function SecurityCard() {
                       <XIcon className="size-4" />
                     </Button>
                   </div>
-                  <img src={setupData.qrCodeDataUrl} alt="2FA QR" className="h-44 w-44 rounded-md bg-white p-2" />
+                  <div className="inline-flex rounded-md bg-white p-2">
+                    <QRCodeSVG value={setupData.otpauthUri} size={176} />
+                  </div>
                   <p className="text-xs text-muted-foreground">Manual code: {setupData.secret}</p>
                   <InputOTP maxLength={6} value={otpCode} onChange={setOtpCode}>
                     <InputOTPGroup>
