@@ -26,18 +26,19 @@ async function appliedMigrations(client: PoolClient): Promise<Set<string>> {
 }
 
 async function seedDefaultRoles(client: PoolClient): Promise<void> {
-  const { rows } = await client.query<{ count: string }>(
-    'SELECT COUNT(*) as count FROM plank_roles',
-  )
-  if (parseInt(rows[0].count) > 0) return
-
+  let created = 0
   for (const [name, permissions] of Object.entries(DEFAULT_ROLE_PERMISSIONS)) {
-    await client.query(
-      'INSERT INTO plank_roles (id, name, permissions) VALUES ($1, $2, $3)',
+    const result = await client.query(
+      `
+      INSERT INTO plank_roles (id, name, permissions)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (name) DO NOTHING
+      `,
       [createId(), name, JSON.stringify(permissions)],
     )
+    created += result.rowCount ?? 0
   }
-  console.log('[plank/db] Seeded default roles.')
+  if (created > 0) console.log(`[plank/db] Seeded missing default roles: ${created}.`)
 }
 
 export async function migrate(): Promise<void> {

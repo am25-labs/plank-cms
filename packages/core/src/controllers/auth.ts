@@ -404,11 +404,16 @@ export async function register(req: Request, res: Response): Promise<void> {
     'SELECT id, name FROM plank_roles WHERE name = $1',
     ['Super Admin'],
   )
+  const superAdminRole = roleRows[0]
+  if (!superAdminRole) {
+    res.status(500).json({ error: 'Super Admin role is not configured.' })
+    return
+  }
 
   const id = createId()
   await pool.query(
     'INSERT INTO plank_users (id, email, password, role_id) VALUES ($1, $2, $3, $4)',
-    [id, email, hashed, roleRows[0].id],
+    [id, email, hashed, superAdminRole.id],
   )
 
   res.status(201).json({ id, email })
