@@ -1624,6 +1624,8 @@ function NavigationInput({
 
 function toSlug(value: string): string {
   return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/\s+/g, '-')
     .replace(/[^a-z0-9-]/g, '')
@@ -1753,16 +1755,16 @@ function RichTextInput({
 }
 
 export function FieldInput({ field, value, onChange, allValues, disabled }: FieldInputProps) {
-  const uidManual = useRef(false)
+  const lastAutoUid = useRef<string | null>(null)
   const { timezone } = useSettings()
 
-  // Auto-derive UID from targetField while user hasn't manually edited it.
-  // The UID must remain global (not per-locale). Generate only from the non-localized
-  // source value (`allValues[targetField]`). If localization is active and there's no
-  // non-localized source value, do NOT auto-generate (user should disable localization
-  // or provide the non-localized value first).
+  // Auto-derive UID from targetField only while the current UID is empty or still equals
+  // the last auto-generated value. This preserves explicit manual edits.
   useEffect(() => {
-    if (field.type !== 'uid' || !field.targetField || uidManual.current) return
+    if (field.type !== 'uid' || !field.targetField) return
+
+    const currentUid = String(value ?? '').trim()
+    const canAutoUpdate = currentUid === '' || currentUid === lastAutoUid.current
 
     const meta = allValues as Record<string, unknown> & {
       __localizationEnabled?: unknown
@@ -1776,7 +1778,12 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
     // Prefer top-level (non-localized) value
     const topValue = meta[target]
     if (topValue !== undefined && topValue !== null && String(topValue).trim() !== '') {
-      onChange(toSlug(String(topValue)))
+      if (!canAutoUpdate) return
+      const nextAutoUid = toSlug(String(topValue))
+      if (nextAutoUid !== currentUid) {
+        lastAutoUid.current = nextAutoUid
+        onChange(nextAutoUid)
+      }
       return
     }
 
@@ -1799,7 +1806,12 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
         defaultLocaleValues[target] !== undefined &&
         String(defaultLocaleValues[target]).trim() !== ''
       ) {
-        onChange(toSlug(String(defaultLocaleValues[target])))
+        if (!canAutoUpdate) return
+        const nextAutoUid = toSlug(String(defaultLocaleValues[target]))
+        if (nextAutoUid !== currentUid) {
+          lastAutoUid.current = nextAutoUid
+          onChange(nextAutoUid)
+        }
       }
       return
     }
@@ -1817,11 +1829,17 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
         localeValues[target] !== undefined &&
         String(localeValues[target]).trim() !== ''
       ) {
-        onChange(toSlug(String(localeValues[target])))
+        if (!canAutoUpdate) return
+        const nextAutoUid = toSlug(String(localeValues[target]))
+        if (nextAutoUid !== currentUid) {
+          lastAutoUid.current = nextAutoUid
+          onChange(nextAutoUid)
+        }
         return
       }
     }
   }, [
+    value,
     field.type,
     field.targetField,
     allValues[field.targetField ?? ''],
@@ -1908,9 +1926,6 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
         value={String(value ?? '')}
         placeholder="auto-generated"
         onChange={(e) => {
-          const v = e.target.value
-          // If user cleared the UID, allow auto-generation again
-          uidManual.current = Boolean(v && v !== '')
           onChange(e.target.value)
         }}
         disabled={Boolean(disabled)}
