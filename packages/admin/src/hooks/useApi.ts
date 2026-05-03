@@ -32,10 +32,13 @@ export function useApi<T = unknown>() {
         try {
           const json = JSON.parse(text) as {
             message?: string
+            error?: string
             errors?: { formErrors?: string[]; fieldErrors?: Record<string, string[]> }
           }
           if (json.message) {
             message = json.message
+          } else if (json.error) {
+            message = json.error
           } else if (json.errors) {
             const fieldMsgs = Object.values(json.errors.fieldErrors ?? {}).flat()
             const formMsgs = json.errors.formErrors ?? []

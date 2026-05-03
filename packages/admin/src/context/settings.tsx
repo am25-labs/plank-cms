@@ -1,9 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { useAuth } from './auth.tsx'
 
 interface SettingsContextValue {
   timezone: string
   locales: string[]
   defaultLocale: string
+  editorialMode: boolean
   refreshSettings: () => void
 }
 
@@ -11,15 +13,36 @@ const SettingsContext = createContext<SettingsContextValue>({
   timezone: 'UTC',
   locales: ['en'],
   defaultLocale: 'en',
+  editorialMode: false,
   refreshSettings: () => {},
 })
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
+  const { status, user } = useAuth()
   const [timezone, setTimezone] = useState('UTC')
   const [locales, setLocales] = useState<string[]>(['en'])
   const [defaultLocale, setDefaultLocale] = useState<string>('en')
+  const [editorialMode, setEditorialMode] = useState(false)
 
   const fetchSettings = useCallback(() => {
+    if (status !== 'authenticated') return
+
+    // Editorial mode must be available to every authenticated role.
+    fetch('/cms/admin/modes', {
+      credentials: 'include',
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((modes: { editorial?: boolean } | null) => {
+        if (modes) setEditorialMode(Boolean(modes.editorial))
+      })
+      .catch(() => {})
+
+    const permissions = user?.permissions ?? []
+    const canReadGeneral = permissions.includes('*') || permissions.includes('settings:overview:read')
+
+    // General settings are only fetched for users with explicit access.
+    if (!canReadGeneral) return
+
     fetch('/cms/admin/settings/general', {
       credentials: 'include',
     })
@@ -46,15 +69,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (data?.default_locale) setDefaultLocale(data.default_locale)
       })
       .catch(() => {})
-  }, [])
+  }, [status, user?.permissions])
 
   useEffect(() => {
+    if (status !== 'authenticated') {
+      setEditorialMode(false)
+      return
+    }
     fetchSettings()
-  }, [fetchSettings])
+  }, [status, fetchSettings])
 
   return (
     <SettingsContext.Provider
-      value={{ timezone, locales, defaultLocale, refreshSettings: fetchSettings }}
+      value={{ timezone, locales, defaultLocale, editorialMode, refreshSettings: fetchSettings }}
     >
       {children}
     </SettingsContext.Provider>

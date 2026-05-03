@@ -14,13 +14,15 @@ import {
   SelectValue,
 } from '@/components/ui/select.tsx'
 import { Spinner } from '@/components/ui/spinner.tsx'
+import { Switch } from '@/components/ui/switch.tsx'
+import { Separator } from '@/components/ui/separator.tsx'
 import { useSettings } from '@/context/settings.tsx'
 import { useAuth } from '@/context/auth.tsx'
 import { Card, CardContent } from '@/components/ui/card.tsx'
+import { toast } from 'sonner'
 import pkg from '../../../package.json'
 import HeaderFixed from '@/components/Header.tsx'
 
-// Common IANA timezone identifiers with friendly labels
 const TIMEZONES = [
   { value: 'UTC', label: 'UTC — Coordinated Universal Time' },
   { value: 'America/New_York', label: 'America/New_York — Eastern Time (UTC-5/4)' },
@@ -59,19 +61,19 @@ const TIMEZONES = [
   { value: 'Pacific/Auckland', label: 'Pacific/Auckland — New Zealand (UTC+12/13)' },
 ]
 
-// GeneralSettings
-
 function GeneralSettings() {
   const { user } = useAuth()
   const { data, loading } = useFetch<Record<string, string>>('/cms/admin/settings/general')
-  const { request, loading: saving } = useApi()
+  const { request: saveTimezoneRequest, loading: savingTimezone } = useApi()
+  const { request: saveLocalesRequest, loading: savingLocales } = useApi()
+  const { request: saveEditorialRequest, loading: savingEditorial } = useApi()
   const { refreshSettings } = useSettings()
 
   const [timezone, setTimezone] = useState('UTC')
   const [locales, setLocales] = useState<string[]>([])
   const [defaultLocale, setDefaultLocale] = useState<string>('en')
   const [newLocale, setNewLocale] = useState<string>('')
-  const [saved, setSaved] = useState(false)
+  const [editorialMode, setEditorialMode] = useState(false)
   const permissions = user?.permissions ?? []
   const canWriteOverview =
     permissions.includes('*') || permissions.includes('settings:overview:write')
@@ -92,16 +94,20 @@ function GeneralSettings() {
       }
     }
     if (data?.default_locale) setDefaultLocale(data.default_locale)
+    setEditorialMode(String(data?.editorial_mode ?? 'false').toLowerCase() === 'true')
   }, [data])
 
-  async function handleSave() {
-    const payload: Record<string, string> = { timezone }
-    if (locales.length) payload.locales = JSON.stringify(locales)
-    if (defaultLocale) payload.default_locale = defaultLocale
-    await request('/cms/admin/settings/general', 'PUT', payload)
-    refreshSettings()
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+  async function handleSaveLocales() {
+    try {
+      await saveLocalesRequest('/cms/admin/settings/general', 'PUT', {
+        locales: JSON.stringify(locales),
+        default_locale: defaultLocale,
+      })
+      refreshSettings()
+      toast.success('Locales saved')
+    } catch {
+      toast.error('Could not save locales')
+    }
   }
 
   if (loading) return <Spinner />
@@ -121,14 +127,30 @@ function GeneralSettings() {
           </div>
         </CardContent>
       </Card>
+
       <div className="border-b pb-4">
         <h2 className="text-2xl font-semibold">Commons</h2>
         <p className="text-sm text-muted-foreground">General settings that apply across the CMS.</p>
       </div>
-      <div className="space-y-1.5">
+
+      <div className="space-y-2">
         <Label htmlFor="timezone">Timezone</Label>
-        <Select value={timezone} onValueChange={setTimezone}>
-          <SelectTrigger id="timezone" className="w-1/2" disabled={!canWriteOverview}>
+        <Select
+          value={timezone}
+          onValueChange={(next) => {
+            setTimezone(next)
+            void (async () => {
+              try {
+                await saveTimezoneRequest('/cms/admin/settings/general', 'PUT', { timezone: next })
+                refreshSettings()
+                toast.success('Timezone saved')
+              } catch {
+                toast.error('Could not save timezone')
+              }
+            })()
+          }}
+        >
+          <SelectTrigger id="timezone" className="w-full" disabled={!canWriteOverview}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="max-h-72">
@@ -139,51 +161,58 @@ function GeneralSettings() {
             ))}
           </SelectContent>
         </Select>
-        <p className="text-xs text-muted-foreground">
-          Used to display dates and times across the admin panel.
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-muted-foreground">
+            Used to display dates and times across the admin panel.
+          </p>
+          {savingTimezone && <span className="text-xs text-muted-foreground">Saving…</span>}
+        </div>
       </div>
 
-      <div className="space-y-1.5">
-        <Label>Locales</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder={`E.g. "en"`}
-            value={newLocale}
-            onChange={(e) => setNewLocale(e.target.value)}
-            className="w-1/4"
-            disabled={!canWriteOverview}
-          />
-          <Button
-            variant="outline"
-            disabled={!canWriteOverview}
-            onClick={() => {
-              const code = newLocale.trim().toLowerCase()
-              if (!code) return
-              if (!locales.includes(code)) setLocales((s) => [...s, code])
-              setNewLocale('')
-            }}
-          >
-            Add
-          </Button>
-        </div>
-        <div className="flex gap-2 mt-2">
-          {locales.map((l) => (
-            <Button
-              key={l}
-              variant="ghost"
-              size="sm"
-              onClick={() => setLocales((s) => s.filter((x) => x !== l))}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Locales</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder={`E.g. "en"`}
+              value={newLocale}
+              onChange={(e) => setNewLocale(e.target.value)}
+              className="h-9 w-full"
               disabled={!canWriteOverview}
+            />
+            <Button
+              variant="outline"
+              className="h-9"
+              disabled={!canWriteOverview}
+              onClick={() => {
+                const code = newLocale.trim().toLowerCase()
+                if (!code) return
+                if (!locales.includes(code)) setLocales((s) => [...s, code])
+                setNewLocale('')
+              }}
             >
-              {l.toUpperCase()}
+              Add
             </Button>
-          ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {locales.map((l) => (
+              <Button
+                key={l}
+                variant="ghost"
+                size="sm"
+                onClick={() => setLocales((s) => s.filter((x) => x !== l))}
+                disabled={!canWriteOverview}
+              >
+                {l.toUpperCase()}
+              </Button>
+            ))}
+          </div>
         </div>
-        <div className="mt-2">
+
+        <div className="space-y-1.5">
           <Label htmlFor="default-locale">Default locale</Label>
           <Select value={defaultLocale} onValueChange={setDefaultLocale}>
-            <SelectTrigger id="default-locale" className="w-1/2" disabled={!canWriteOverview}>
+            <SelectTrigger id="default-locale" className="w-full" disabled={!canWriteOverview}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-h-72">
@@ -198,17 +227,53 @@ function GeneralSettings() {
               )}
             </SelectContent>
           </Select>
+          <div className="pt-2 flex justify-end">
+            <Button
+              variant="outline"
+              onClick={handleSaveLocales}
+              disabled={savingLocales || !canWriteOverview}
+            >
+              {savingLocales ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Button onClick={handleSave} disabled={saving || !canWriteOverview}>
-        {saved ? 'Saved' : saving ? 'Saving…' : 'Save'}
-      </Button>
+      <Separator />
+
+      <div className="flex items-center justify-between rounded-md border p-3">
+        <div>
+          <Label htmlFor="editorial-mode">Editorial Mode</Label>
+          <p className="text-xs text-muted-foreground">
+            Enables Editor and Viewer workflows for editorial review.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Switch
+            id="editorial-mode"
+            checked={editorialMode}
+            onCheckedChange={(next) => {
+              setEditorialMode(next)
+              void (async () => {
+                try {
+                  await saveEditorialRequest('/cms/admin/settings/general', 'PUT', {
+                    editorial_mode: String(next),
+                  })
+                  refreshSettings()
+                  toast.success('Editorial Mode saved')
+                } catch {
+                  toast.error('Could not save Editorial Mode')
+                }
+              })()
+            }}
+            disabled={!canWriteOverview}
+          />
+          {savingEditorial && <span className="text-xs text-muted-foreground">Saving…</span>}
+        </div>
+      </div>
     </div>
   )
 }
-
-// SettingsOverview
 
 export function SettingsOverview() {
   return (

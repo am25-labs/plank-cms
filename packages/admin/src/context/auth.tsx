@@ -12,6 +12,10 @@ interface User {
   organization: string | null
   country: string | null
   twoFactorEnabled: boolean
+  enabled?: boolean
+  modes?: {
+    editorial: boolean
+  }
 }
 
 interface AuthState {
@@ -70,6 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         country?: string | null
         permissions?: string[]
         two_factor_enabled?: boolean
+        enabled?: boolean
+        modes?: {
+          editorial?: boolean
+        }
       } | null) => {
         if (!data) {
           dispatch({ type: 'LOGOUT' })
@@ -90,6 +98,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               organization: data.organization ?? null,
               country: data.country ?? null,
               twoFactorEnabled: data.two_factor_enabled ?? false,
+              enabled: data.enabled ?? true,
+              modes: {
+                editorial: Boolean(data.modes?.editorial),
+              },
             },
           },
         })
