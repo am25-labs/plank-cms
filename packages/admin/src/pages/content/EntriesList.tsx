@@ -561,14 +561,14 @@ function ConfigureViewDialog({
 
         <div className="flex flex-col flex-1 min-h-0 gap-5 py-1">
           {/* Displayed fields */}
-          <div className="flex-none">
+          <div className="flex flex-col flex-1 min-h-0">
             <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Displayed fields
             </p>
             {visible.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">No fields selected.</p>
             ) : (
-              <ul className="space-y-1">
+              <ul className="space-y-1 overflow-y-auto flex-1 min-h-0">
                 {visible.map((name, idx) => {
                   const base = String(name).split('.')[0]
                   const field = allFields.find((f) => f.name === base)
