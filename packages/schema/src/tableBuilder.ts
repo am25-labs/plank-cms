@@ -63,6 +63,9 @@ export async function createTable(contentType: ContentType): Promise<void> {
     `  published_at   TIMESTAMP,`,
     `  scheduled_for  TIMESTAMP,`,
     `  created_by     TEXT REFERENCES plank_users(id) ON DELETE SET NULL,`,
+    `  editor_id      TEXT REFERENCES plank_users(id) ON DELETE SET NULL,`,
+    `  review_locked_by_editor BOOLEAN NOT NULL DEFAULT FALSE,`,
+    `  review_rejected BOOLEAN NOT NULL DEFAULT FALSE,`,
     `  created_at     TIMESTAMP NOT NULL DEFAULT NOW(),`,
     `  updated_at     TIMESTAMP NOT NULL DEFAULT NOW()`,
     `)`,
@@ -238,6 +241,40 @@ export async function syncAllTables(): Promise<void> {
         console.log(`[plank] Added missing column "localized" to table "${ct.tableName}"`)
       } catch {
         // table may not exist or other race conditions; ignore and continue
+      }
+    }
+
+    // Ensure editorial workflow columns exist on all entry tables.
+    if (!existingColumns.has('editor_id')) {
+      try {
+        await pool.query(
+          `ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS editor_id TEXT REFERENCES plank_users(id) ON DELETE SET NULL`,
+        )
+        existingColumns.add('editor_id')
+      } catch {
+        // ignore and continue
+      }
+    }
+
+    if (!existingColumns.has('review_locked_by_editor')) {
+      try {
+        await pool.query(
+          `ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS review_locked_by_editor BOOLEAN NOT NULL DEFAULT FALSE`,
+        )
+        existingColumns.add('review_locked_by_editor')
+      } catch {
+        // ignore and continue
+      }
+    }
+
+    if (!existingColumns.has('review_rejected')) {
+      try {
+        await pool.query(
+          `ALTER TABLE ${quotedTableName} ADD COLUMN IF NOT EXISTS review_rejected BOOLEAN NOT NULL DEFAULT FALSE`,
+        )
+        existingColumns.add('review_rejected')
+      } catch {
+        // ignore and continue
       }
     }
 
