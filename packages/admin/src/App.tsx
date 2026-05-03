@@ -22,6 +22,8 @@ import { SettingsApiTokens } from './pages/settings/ApiTokens.tsx'
 import { SettingsWebhooks } from './pages/settings/Webhooks.tsx'
 import { Profile } from './pages/Profile.tsx'
 
+const NON_VIEWER_ROLES = ['Super Admin', 'Admin', 'Editor', 'Contributor']
+
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   {
@@ -31,22 +33,43 @@ const router = createBrowserRouter([
       </ProtectedRoute>
     ),
     children: [
-      { index: true, element: <Dashboard /> },
+      {
+        index: true,
+        element: (
+          <ProtectedRoute roles={NON_VIEWER_ROLES} redirectTo="/content">
+            <Dashboard />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'content',
         element: <ContentManager />,
         children: [
           { index: true, element: <ContentIndex /> },
           { path: ':slug', element: <ContentSlugIndex /> },
-          { path: ':slug/new', element: <EntryForm /> },
+          {
+            path: ':slug/new',
+            element: (
+              <ProtectedRoute permission="entries:write" redirectTo="/content">
+                <EntryForm />
+              </ProtectedRoute>
+            ),
+          },
           { path: ':slug/:id', element: <EntryForm /> },
         ],
       },
-      { path: 'media', element: <MediaLibrary /> },
+      {
+        path: 'media',
+        element: (
+          <ProtectedRoute roles={NON_VIEWER_ROLES} redirectTo="/content">
+            <MediaLibrary />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'content-types',
         element: (
-          <ProtectedRoute permission="content-types:write">
+          <ProtectedRoute permission="content-types:write" roles={NON_VIEWER_ROLES} redirectTo="/content">
             <ContentTypeBuilder />
           </ProtectedRoute>
         ),
@@ -59,7 +82,7 @@ const router = createBrowserRouter([
       {
         path: 'settings',
         element: (
-          <ProtectedRoute permission="settings:overview:read">
+          <ProtectedRoute permission="settings:overview:read" roles={NON_VIEWER_ROLES} redirectTo="/content">
             <Settings />
           </ProtectedRoute>
         ),

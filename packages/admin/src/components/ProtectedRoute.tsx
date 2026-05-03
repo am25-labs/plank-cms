@@ -10,10 +10,12 @@ export function ProtectedRoute({
   children,
   roles,
   permission,
+  redirectTo = '/',
 }: {
   children: ReactNode
   roles?: string[]
   permission?: string
+  redirectTo?: string
 }) {
   const { status, user } = useAuth()
 
@@ -21,11 +23,11 @@ export function ProtectedRoute({
   if (status === 'unauthenticated') return <Navigate to="/login" replace />
 
   if (roles && user && !roles.map((r) => r.toLowerCase()).includes(user.role.toLowerCase())) {
-    return <Navigate to="/" replace />
+    return <Navigate to={redirectTo} replace />
   }
 
   if (permission && user && !hasPermission(user.permissions, permission)) {
-    return <Navigate to="/" replace />
+    return <Navigate to={redirectTo} replace />
   }
 
   return <>{children}</>

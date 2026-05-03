@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   PlusIcon,
   PencilIcon,
+  EyeIcon,
   Trash2Icon,
   FileTextIcon,
   ImageIcon,
@@ -94,10 +95,12 @@ type ContentType = { name: string; slug: string; fields: FieldDef[] }
 
 type Entry = Record<string, unknown> & {
   id: string
-  status: 'draft' | 'scheduled' | 'published'
+  status: 'draft' | 'scheduled' | 'published' | 'pending' | 'in_review'
   published_data: Record<string, unknown> | null
   published_at: string | null
   scheduled_for: string | null
+  review_locked_by_editor?: boolean
+  review_rejected?: boolean
   created_at: string
   updated_at: string
   _author_first_name: string | null
@@ -419,6 +422,11 @@ function StatusBadge({ entry, fields }: { entry: Entry; fields: FieldDef[] }) {
   }
 
   if (entry.status === 'draft') return <Badge variant="outline">Draft</Badge>
+  if (entry.status === 'pending') {
+    if (entry.review_rejected) return <Badge variant="destructive">Pending</Badge>
+    return <Badge className="bg-amber-500 text-black hover:bg-amber-500">Pending</Badge>
+  }
+  if (entry.status === 'in_review') return <Badge variant="outline">In Review</Badge>
 
   const normalize = (v: unknown, type: string) => {
     if (type === 'datetime' && v && typeof v === 'string') {
@@ -783,11 +791,16 @@ export function EntriesList() {
   const permissions = user?.permissions ?? []
   const canWriteEntries = permissions.includes('*') || permissions.includes('entries:write')
   const canDeleteEntries = permissions.includes('*') || permissions.includes('entries:delete')
+  const isViewerRole = user?.role?.toLowerCase() === 'viewer'
   const isContributorRole = user?.role?.toLowerCase() === 'contributor'
   const isEditorRole = user?.role?.toLowerCase() === 'editor'
   const isOwnershipRestrictedDeleteRole = isContributorRole || isEditorRole
   const isOwnEntry = (entry: Entry) => String(entry.created_by ?? '') === String(user?.id ?? '')
-  const canEditEntry = (entry: Entry) => canWriteEntries && (!isContributorRole || isOwnEntry(entry))
+  const isReviewDisabledForRole = (_entry: Entry) => false
+  const canEditEntry = (entry: Entry) =>
+    canWriteEntries &&
+    (!isContributorRole || isOwnEntry(entry)) &&
+    !isReviewDisabledForRole(entry)
   const canDeleteEntry = (entry: Entry) =>
     canDeleteEntries && (!isOwnershipRestrictedDeleteRole || isOwnEntry(entry))
   const editableSelectedIds = [...selected].filter((id) => {
@@ -931,7 +944,7 @@ export function EntriesList() {
 
         {!loadingEntries && (entries?.data ?? []).length > 0 && (
           <TooltipProvider>
-            {selected.size > 0 && (
+            {!isViewerRole && selected.size > 0 && (
               <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-4 py-2.5">
                 <span className="text-sm font-medium">{selected.size} selected</span>
                 <div className="flex items-center gap-2 ml-auto">
@@ -964,11 +977,13 @@ export function EntriesList() {
                 <TableHeader className="border-b border-border font-bold uppercase">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-10 px-4 py-3">
-                      <Checkbox
-                        checked={allSelected ? true : someSelected ? 'indeterminate' : false}
-                        onCheckedChange={toggleAll}
-                        aria-label="Select all"
-                      />
+                      {!isViewerRole && (
+                        <Checkbox
+                          checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                          onCheckedChange={toggleAll}
+                          aria-label="Select all"
+                        />
+                      )}
                     </TableHead>
                     {columns.map((col) => (
                       <TableHead
@@ -1000,14 +1015,16 @@ export function EntriesList() {
                   {(entries?.data ?? []).map((entry) => (
                     <TableRow
                       key={entry.id}
-                      className={`group transition-colors ${selected.has(entry.id) ? 'bg-muted/40' : 'hover:bg-muted/30'} ${isContributorRole && !isOwnEntry(entry) ? 'opacity-60' : ''}`}
+                      className={`group transition-colors ${selected.has(entry.id) ? 'bg-muted/40' : 'hover:bg-muted/30'} ${isContributorRole && !isOwnEntry(entry) ? 'opacity-60' : ''} ${isReviewDisabledForRole(entry) ? 'opacity-60' : ''}`}
                     >
                       <TableCell className="w-10 px-4 py-3">
-                        <Checkbox
-                          checked={selected.has(entry.id)}
-                          onCheckedChange={() => toggleOne(entry.id)}
-                          aria-label="Select row"
-                        />
+                        {!isViewerRole && (
+                          <Checkbox
+                            checked={selected.has(entry.id)}
+                            onCheckedChange={() => toggleOne(entry.id)}
+                            aria-label="Select row"
+                          />
+                        )}
                       </TableCell>
                       {columns.map((col) => {
                         const rawValue = entry[col.field.name]
@@ -1057,24 +1074,38 @@ export function EntriesList() {
                       </TableCell>
                       <TableCell className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => navigate(`/content/${slug}/${entry.id}`)}
-                            disabled={!canEditEntry(entry)}
-                            className="flex size-8 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                          >
-                            <PencilIcon className="size-3.5" />
-                          </Button>
-                          {canDeleteEntry(entry) && (
+                          {isViewerRole ? (
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => setDeletingId(entry.id)}
-                              className="flex size-8 items-center justify-center rounded text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => navigate(`/content/${slug}/${entry.id}`)}
+                              className="flex size-8 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                             >
-                              <Trash2Icon className="size-3.5" />
+                              <EyeIcon className="size-3.5" />
                             </Button>
+                          ) : (
+                            <>
+                              {canEditEntry(entry) && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => navigate(`/content/${slug}/${entry.id}`)}
+                                  className="flex size-8 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                >
+                                  <PencilIcon className="size-3.5" />
+                                </Button>
+                              )}
+                              {canDeleteEntry(entry) && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setDeletingId(entry.id)}
+                                  className="flex size-8 items-center justify-center rounded text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                  <Trash2Icon className="size-3.5" />
+                                </Button>
+                              )}
+                            </>
                           )}
                         </div>
                       </TableCell>

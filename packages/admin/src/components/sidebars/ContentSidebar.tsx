@@ -2,6 +2,7 @@ import { StarIcon } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
+import { useAuth } from '@/context/auth.tsx'
 import { Spinner } from '@/components/ui/spinner.tsx'
 
 type ContentType = {
@@ -13,8 +14,11 @@ type ContentType = {
 
 export function ContentSidebar() {
   const { pathname } = useLocation()
+  const { user } = useAuth()
   const { data, loading, error, refetch } = useFetch<ContentType[]>('/cms/admin/content-types')
   const { request } = useApi<ContentType>()
+  const permissions = user?.permissions ?? []
+  const canSetDefault = permissions.includes('*') || permissions.includes('content-types:write')
 
   async function handleSetDefault(e: React.MouseEvent, slug: string) {
     e.preventDefault()
@@ -73,19 +77,21 @@ export function ContentSidebar() {
                       ].join(' ')}
                     >
                       <span className="min-w-0 flex-1 truncate">{ct.name}</span>
-                      <button
-                        type="button"
-                        title={ct.isDefault ? 'Default content type' : 'Set as default'}
-                        onClick={(e) => handleSetDefault(e, ct.slug)}
-                        className={[
-                          'shrink-0 rounded transition-colors',
-                          ct.isDefault
-                            ? 'text-amber-400'
-                            : 'text-transparent group-hover:text-muted-foreground/40 hover:!text-amber-400',
-                        ].join(' ')}
-                      >
-                        <StarIcon className={`size-3.5 ${ct.isDefault ? 'fill-amber-400' : ''}`} />
-                      </button>
+                      {canSetDefault && (
+                        <button
+                          type="button"
+                          title={ct.isDefault ? 'Default content type' : 'Set as default'}
+                          onClick={(e) => handleSetDefault(e, ct.slug)}
+                          className={[
+                            'shrink-0 rounded transition-colors',
+                            ct.isDefault
+                              ? 'text-amber-400'
+                              : 'text-transparent group-hover:text-muted-foreground/40 hover:!text-amber-400',
+                          ].join(' ')}
+                        >
+                          <StarIcon className={`size-3.5 ${ct.isDefault ? 'fill-amber-400' : ''}`} />
+                        </button>
+                      )}
                     </NavLink>
                   ))}
                 </nav>

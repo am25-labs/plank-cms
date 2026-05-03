@@ -63,9 +63,12 @@ function LayoutShell() {
   }
 
   const permissions = user?.permissions ?? []
+  const isViewer = user?.role?.toLowerCase() === 'viewer'
   const visibleNavItems = NAV_ITEMS.filter(
-    ({ permission }) =>
-      !permission || permissions.includes('*') || permissions.includes(permission),
+    ({ to, permission }) => {
+      if (isViewer) return to === '/content'
+      return !permission || permissions.includes('*') || permissions.includes(permission)
+    },
   )
 
   return (
