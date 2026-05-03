@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useBlocker } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Trash2Icon, CalendarClockIcon, ChevronDownIcon } from 'lucide-react'
+import {
+  Trash2Icon,
+  CalendarClockIcon,
+  ChevronDownIcon,
+  PencilIcon,
+  XIcon,
+  SaveIcon,
+} from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { useKeyboardShortcut } from '@/hooks/useKeyboardShortcut.ts'
@@ -17,6 +24,13 @@ import { Badge } from '@/components/ui/badge.tsx'
 import { Calendar } from '@/components/ui/calendar.tsx'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover.tsx'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select.tsx'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -29,6 +43,7 @@ import { FIELD_WIDTH_SPAN } from '@/components/content-types/FieldCard.tsx'
 import type { FieldWidth } from '@/components/content-types/FieldCard.tsx'
 import { formatDatetime, getTimeInTimezone, combineDateAndTime } from '@/lib/formatDate.ts'
 import HeaderFixed from '@/components/Header'
+import { UserAvatar } from '@/components/ui/custom/UserAvatar.tsx'
 
 type ContentType = {
   name: string
@@ -40,9 +55,22 @@ type ContentType = {
 type Entry = Record<string, unknown> & {
   id?: string
   created_by?: string | null
-  status?: 'draft' | 'scheduled' | 'published'
+  status?: 'draft' | 'scheduled' | 'published' | 'pending' | 'in_review'
   published_data?: Record<string, unknown> | null
   scheduled_for?: string | null
+  editor_id?: string | null
+  review_locked_by_editor?: boolean
+  review_rejected?: boolean
+  _editor_first_name?: string | null
+  _editor_last_name?: string | null
+  _editor_avatar_url?: string | null
+}
+
+type UserOption = {
+  id: string
+  role_name?: string
+  first_name?: string | null
+  last_name?: string | null
 }
 
 type LocalizedMeta = { enabled?: boolean; primary?: string }
@@ -68,8 +96,9 @@ export function EntryForm() {
   const { slug, id } = useParams<{ slug: string; id: string }>()
   const navigate = useNavigate()
   const isNew = !id
-  const { timezone, locales: settingsLocales, defaultLocale } = useSettings()
-  const { user } = useAuth()
+  const { timezone, locales: settingsLocales, defaultLocale, editorialMode } = useSettings()
+  const { user, status: authStatus } = useAuth()
+  const role = user?.role?.toLowerCase() ?? ''
 
   const { data: ct, loading: loadingCt } = useFetch<ContentType>(
     slug ? `/cms/admin/content-types/${slug}` : null,
@@ -77,6 +106,9 @@ export function EntryForm() {
   const { data: existing, loading: loadingEntry } = useFetch<Entry>(
     slug && id ? `/cms/admin/entries/${slug}/${id}` : null,
   )
+  const reviewerPickerEnabled =
+    editorialMode && ['editor', 'admin', 'super admin'].includes(user?.role?.toLowerCase() ?? '')
+  const { data: users } = useFetch<UserOption[]>(reviewerPickerEnabled ? '/cms/admin/users' : null)
 
   const { loading: saving, request } = useApi<Entry>()
   const { loading: patching, request: requestStatus } = useApi<Entry>()
@@ -87,10 +119,18 @@ export function EntryForm() {
   const [activeLocale, setActiveLocale] = useState<string>('')
   const [localizationEnabled, setLocalizationEnabled] = useState<boolean>(false)
   // newLocale removed: locales now managed in Settings > Overview > General
-  const [status, setStatus] = useState<'draft' | 'scheduled' | 'published'>('draft')
+  const [status, setStatus] = useState<
+    'draft' | 'scheduled' | 'published' | 'pending' | 'in_review'
+  >('draft')
   const [scheduledFor, setScheduledFor] = useState<string>('')
   const [isPublishedStale, setIsPublishedStale] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [reviewRejected, setReviewRejected] = useState(false)
+  const [assignedEditorId, setAssignedEditorId] = useState<string | null>(null)
+  const [assignedEditorFirstName, setAssignedEditorFirstName] = useState<string | null>(null)
+  const [assignedEditorLastName, setAssignedEditorLastName] = useState<string | null>(null)
+  const [assignedEditorAvatarUrl, setAssignedEditorAvatarUrl] = useState<string | null>(null)
+  const [reviewEditEnabled, setReviewEditEnabled] = useState(false)
 
   // Scheduler panel state
   const [showScheduler, setShowScheduler] = useState(false)
@@ -117,6 +157,12 @@ export function EntryForm() {
       setStatus('draft')
       setScheduledFor('')
       setIsPublishedStale(false)
+      setReviewRejected(false)
+      setAssignedEditorId(null)
+      setAssignedEditorFirstName(null)
+      setAssignedEditorLastName(null)
+      setAssignedEditorAvatarUrl(null)
+      setReviewEditEnabled(false)
       original.current = stableStringify(empty)
       return
     }
@@ -146,6 +192,12 @@ export function EntryForm() {
     setLocalizationEnabled(Boolean(enabled))
     setValues(initial)
     setStatus(existing.status ?? 'draft')
+    setReviewRejected(Boolean(existing.review_rejected))
+    setAssignedEditorId(existing.editor_id ?? null)
+    setAssignedEditorFirstName(existing._editor_first_name ?? null)
+    setAssignedEditorLastName(existing._editor_last_name ?? null)
+    setAssignedEditorAvatarUrl(existing._editor_avatar_url ?? null)
+    setReviewEditEnabled(false)
     original.current = stableStringify(initial)
 
     if (existing.scheduled_for) {
@@ -366,14 +418,31 @@ export function EntryForm() {
       if (isNew) skipBlocker.current = true
     }
 
+    // If auth profile is temporarily unavailable (e.g. /users/me transient 401),
+    // default to the safe editorial path (request review) instead of publish.
+    const reviewMode =
+      editorialMode && (role === 'contributor' || role === '' || authStatus !== 'authenticated')
     try {
-      await requestStatus(`/cms/admin/entries/${slug}/${entryId}/status`, 'PATCH', {
-        status: 'published',
+      const patched = await requestStatus(`/cms/admin/entries/${slug}/${entryId}/status`, 'PATCH', {
+        status: reviewMode ? 'pending' : 'published',
+        review_rejected: false,
       })
-      setStatus('published')
+      setStatus((patched?.status as Entry['status']) ?? (reviewMode ? 'pending' : 'published'))
+      setReviewRejected(Boolean(patched?.review_rejected))
+      setAssignedEditorId((patched?.editor_id as string | null | undefined) ?? assignedEditorId)
+      setAssignedEditorFirstName(
+        (patched?._editor_first_name as string | null | undefined) ?? assignedEditorFirstName,
+      )
+      setAssignedEditorLastName(
+        (patched?._editor_last_name as string | null | undefined) ?? assignedEditorLastName,
+      )
+      setAssignedEditorAvatarUrl(
+        (patched?._editor_avatar_url as string | null | undefined) ?? assignedEditorAvatarUrl,
+      )
       setScheduledFor('')
       setIsPublishedStale(false)
       setShowScheduler(false)
+      setReviewEditEnabled(false)
       if (isNew) navigate(`/content/${slug}/${entryId}`, { replace: true })
     } catch {
       if (isNew && entryId) navigate(`/content/${slug}/${entryId}`, { replace: true })
@@ -431,22 +500,85 @@ export function EntryForm() {
     }
   }
 
+  async function handleAssignEditor(editorId: string) {
+    if (!slug || !id) return
+    const nextId = editorId === 'none' ? null : editorId
+    const patched = await requestStatus(`/cms/admin/entries/${slug}/${id}/status`, 'PATCH', {
+      status: 'in_review',
+      editor_id: nextId,
+      review_locked_by_editor: existing?.review_locked_by_editor ?? false,
+    })
+    setStatus((patched?.status as Entry['status']) ?? 'in_review')
+    setReviewRejected(Boolean(patched?.review_rejected))
+    setAssignedEditorId((patched?.editor_id as string | null | undefined) ?? nextId)
+    setAssignedEditorFirstName((patched?._editor_first_name as string | null | undefined) ?? null)
+    setAssignedEditorLastName((patched?._editor_last_name as string | null | undefined) ?? null)
+    setAssignedEditorAvatarUrl((patched?._editor_avatar_url as string | null | undefined) ?? null)
+    setReviewEditEnabled(false)
+  }
+
+  async function handleToggleReviewLock() {
+    setReviewEditEnabled((prev) => !prev)
+  }
+
+  async function handleReject() {
+    if (!slug || !id) return
+    const patched = await requestStatus(`/cms/admin/entries/${slug}/${id}/status`, 'PATCH', {
+      status: 'pending',
+      review_rejected: true,
+    })
+    setStatus((patched?.status as Entry['status']) ?? 'pending')
+    setReviewRejected(Boolean(patched?.review_rejected))
+    setReviewEditEnabled(false)
+  }
+
   const loading = loadingCt || (!isNew && loadingEntry)
   const busy = saving || patching
   const permissions = user?.permissions ?? []
   const canWriteEntries = permissions.includes('*') || permissions.includes('entries:write')
   const canDeleteEntries = permissions.includes('*') || permissions.includes('entries:delete')
-  const isContributorRole = user?.role?.toLowerCase() === 'contributor'
-  const isEditorRole = user?.role?.toLowerCase() === 'editor'
+  const isContributorRole = role === 'contributor'
+  const isEditorRole = role === 'editor'
+  const isAdminOrSuper = ['admin', 'super admin'].includes(role)
+  const isViewerRole = role === 'viewer'
   const isOwnershipRestrictedDeleteRole = isContributorRole || isEditorRole
   const isReadOnlySingle = isContributorRole && ct?.kind === 'single'
   const isOwnEntry = isNew || String(existing?.created_by ?? '') === String(user?.id ?? '')
-  const readOnlyByOwnership = isContributorRole && !isOwnEntry
-  const readOnly = !canWriteEntries || isReadOnlySingle || readOnlyByOwnership
-  const canDeleteCurrentEntry =
-    canDeleteEntries && (!isOwnershipRestrictedDeleteRole || isOwnEntry)
-  const canPublish = isDirty || status === 'draft' || status === 'scheduled' || isPublishedStale
+  const contributorInReview = editorialMode && isContributorRole && status === 'in_review'
+  const isAssignedReviewer =
+    editorialMode &&
+    (isEditorRole || isAdminOrSuper) &&
+    !!assignedEditorId &&
+    assignedEditorId === user?.id
+  const reviewerCanEnterEditMode =
+    isAssignedReviewer && (status === 'pending' || status === 'in_review') && !reviewRejected
+  const reviewerNeedsEditToggle =
+    editorialMode &&
+    (isEditorRole || isAdminOrSuper) &&
+    (status === 'pending' || status === 'in_review')
+  const readOnlyForReviewRoles =
+    reviewerNeedsEditToggle && (!isAssignedReviewer || !reviewEditEnabled)
+  const contributorPendingYellow =
+    editorialMode && isContributorRole && status === 'pending' && !reviewRejected
+  const readOnlyByOwnership =
+    (isContributorRole && !isOwnEntry) ||
+    contributorPendingYellow ||
+    contributorInReview ||
+    readOnlyForReviewRoles
+  const readOnly = isViewerRole || !canWriteEntries || isReadOnlySingle || readOnlyByOwnership
+  const canDeleteCurrentEntry = canDeleteEntries && (!isOwnershipRestrictedDeleteRole || isOwnEntry)
+  const canContributorResubmitPending =
+    editorialMode && isContributorRole && status === 'pending' && (reviewRejected ? true : isDirty)
+  const canPublish =
+    canContributorResubmitPending ||
+    isDirty ||
+    status === 'draft' ||
+    status === 'scheduled' ||
+    (!editorialMode && status === 'pending') ||
+    (editorialMode && status === 'pending' && !isContributorRole) ||
+    isPublishedStale
   const canSchedule = !!(schedDate && schedTime)
+  const publishLabel = editorialMode && isContributorRole ? 'Review' : 'Publish'
 
   const saveDraftEnabled = !readOnly && !busy && (status === 'scheduled' ? true : isDirty)
   useKeyboardShortcut('mod+s', handleSaveDraft, { enabled: saveDraftEnabled, label: 'Save draft' })
@@ -476,6 +608,14 @@ export function EntryForm() {
         {scheduledFor ? `Scheduled · ${formatDatetime(scheduledFor, timezone)}` : 'Scheduled'}
       </Badge>
     )
+  } else if (status === 'pending') {
+    statusBadge = reviewRejected ? (
+      <Badge variant="destructive">Pending</Badge>
+    ) : (
+      <Badge className="bg-amber-500 text-black hover:bg-amber-500">Pending</Badge>
+    )
+  } else if (status === 'in_review') {
+    statusBadge = <Badge variant="outline">In Review</Badge>
   } else if (status === 'published') {
     statusBadge = (
       <Badge variant={isPublishedStale ? 'secondary' : 'default'}>
@@ -485,6 +625,18 @@ export function EntryForm() {
   } else {
     statusBadge = <Badge variant="secondary">Draft</Badge>
   }
+
+  const reviewerCandidates = (users ?? []).filter((u) => {
+    if (isEditorRole) return u.id === user?.id
+    if (isAdminOrSuper) return u.id === user?.id || (u.role_name ?? '').toLowerCase() === 'editor'
+    return false
+  })
+  const canManageReviewer = !isNew && editorialMode && (isEditorRole || isAdminOrSuper)
+  const showReviewerControl = editorialMode && !isNew && canManageReviewer
+  const showReviewerInfo = editorialMode && !isNew && Boolean(assignedEditorId)
+  const showReviewEditButton = reviewerCanEnterEditMode
+  const showRejectButton = reviewerCanEnterEditMode
+  const reviewerLabel = assignedEditorFirstName || assignedEditorLastName
 
   return (
     <>
@@ -499,7 +651,7 @@ export function EntryForm() {
             <p className="text-muted-foreground text-xs mt-1">{ct.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            {!isNew && canDeleteCurrentEntry && !isReadOnlySingle && (
+            {!editorialMode && !isNew && canDeleteCurrentEntry && !isReadOnlySingle && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -510,39 +662,107 @@ export function EntryForm() {
                 <Trash2Icon className="size-4" />
               </Button>
             )}
-            {!isNew && status === 'published' && !readOnly && (
+            {!editorialMode && !isNew && status === 'published' && !readOnly && (
               <Button variant="outline" onClick={handleRevertToDraft} disabled={busy}>
                 {patching ? <Spinner className="size-4" /> : null}
                 Revert to draft
               </Button>
             )}
-            {!isNew && status === 'scheduled' && !readOnly && (
+            {!editorialMode && !isNew && status === 'scheduled' && !readOnly && (
               <Button variant="outline" onClick={handleRevertToDraft} disabled={busy}>
                 {patching ? <Spinner className="size-4" /> : null}
                 Cancel schedule
               </Button>
             )}
+            {showReviewerControl && (
+              <Select
+                value={assignedEditorId ?? 'none'}
+                onValueChange={handleAssignEditor}
+                disabled={!canManageReviewer || busy}
+              >
+                <SelectTrigger className="h-10 min-h-10 max-h-10 w-42 py-0">
+                  <div className="flex items-center gap-2">
+                    <UserAvatar
+                      avatarUrl={assignedEditorAvatarUrl ?? null}
+                      firstName={assignedEditorFirstName ?? null}
+                      lastName={assignedEditorLastName ?? null}
+                      className="size-5"
+                      fallbackClassName="text-[9px]"
+                    />
+                    <SelectValue placeholder={reviewerLabel ? reviewerLabel : 'Assign editor'} />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {!isEditorRole && <SelectItem value="none">Unassign</SelectItem>}
+                  {reviewerCandidates.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.first_name || u.last_name || u.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {!canManageReviewer && showReviewerInfo && (
+              <div className="inline-flex h-10 items-center gap-2 rounded-md border border-input px-3 text-sm">
+                <UserAvatar
+                  avatarUrl={assignedEditorAvatarUrl ?? null}
+                  firstName={assignedEditorFirstName ?? null}
+                  lastName={assignedEditorLastName ?? null}
+                  className="size-5"
+                  fallbackClassName="text-[9px]"
+                />
+                <span>{reviewerLabel || 'Assigned editor'}</span>
+              </div>
+            )}
+            {showReviewEditButton && (
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleToggleReviewLock}
+                disabled={busy}
+              >
+                <PencilIcon className="size-4" />
+              </Button>
+            )}
+            {showRejectButton && (
+              <Button variant="outline" size="icon" onClick={handleReject} disabled={busy}>
+                <XIcon className="size-4" />
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={handleSaveDraft}
+              size={editorialMode ? 'icon' : 'default'}
               disabled={readOnly || (status === 'scheduled' ? busy : !isDirty || busy)}
             >
-              {saving ? <Spinner className="size-4" /> : null}
-              {status === 'scheduled' ? 'Save draft (cancel schedule)' : 'Save draft'}
+              {saving ? (
+                <Spinner className="size-4" />
+              ) : editorialMode ? (
+                <SaveIcon className="size-4" />
+              ) : null}
+              {!editorialMode &&
+                (status === 'scheduled' ? 'Save draft (cancel schedule)' : 'Save draft')}
             </Button>
-            {status !== 'scheduled' && (
-              <Button variant="outline" onClick={openScheduler} disabled={readOnly || busy}>
+            {status !== 'scheduled' && !(editorialMode && isContributorRole) && (
+              <Button
+                variant="outline"
+                onClick={openScheduler}
+                size={editorialMode ? 'icon' : 'default'}
+                disabled={readOnly || busy}
+              >
                 <CalendarClockIcon className="size-4" />
-                Schedule
+                {!editorialMode && 'Schedule'}
               </Button>
             )}
             <Button onClick={handlePublish} disabled={readOnly || !canPublish || busy}>
               {patching ? <Spinner className="size-4" /> : null}
               {status === 'scheduled'
-                ? 'Publish now'
+                ? editorialMode && isContributorRole
+                  ? 'Review'
+                  : 'Publish now'
                 : status === 'published' && !isPublishedStale
                   ? 'Republish'
-                  : 'Publish'}
+                  : publishLabel}
             </Button>
           </div>
         </div>

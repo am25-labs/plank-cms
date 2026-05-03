@@ -26,13 +26,14 @@ export function ContentSlugIndex() {
   useEffect(() => {
     if (!isSingle) return
     if (loadingEntry) return
-    const isContributorRole = user?.role?.toLowerCase() === 'contributor'
+    const permissions = user?.permissions ?? []
+    const canWriteEntries = permissions.includes('*') || permissions.includes('entries:write')
     if (entry) {
       navigate(`/content/${slug}/${entry.id}`, { replace: true })
-    } else if (entryError && !isContributorRole) {
+    } else if (entryError && canWriteEntries) {
       navigate(`/content/${slug}/new`, { replace: true })
     }
-  }, [isSingle, loadingEntry, entry, entryError, slug, navigate, user?.role])
+  }, [isSingle, loadingEntry, entry, entryError, slug, navigate, user?.permissions])
 
   if (loadingCt || (isSingle && loadingEntry)) {
     return (
