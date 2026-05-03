@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 import { useAuth } from '@/context/auth.tsx'
+import { useSettings } from '@/context/settings.tsx'
 import { Spinner } from '@/components/ui/spinner.tsx'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
@@ -9,6 +10,7 @@ import { Button } from '@/components/ui/button.tsx'
 import { Input } from '@/components/ui/input.tsx'
 import { Label } from '@/components/ui/label.tsx'
 import { Badge } from '@/components/ui/badge.tsx'
+import { Switch } from '@/components/ui/switch.tsx'
 import {
   Table,
   TableBody,
@@ -40,18 +42,21 @@ type User = {
   role_name?: string
   first_name: string | null
   last_name: string | null
+  enabled?: boolean
   created_at: string
 }
 
 type Role = { id: string; name: string }
 
-type CreateForm = { email: string; password: string; roleId: string }
-type EditForm = { email: string; roleId: string; firstName: string; lastName: string }
+type CreateForm = { email: string; password: string; roleId: string; enabled: boolean }
+type EditForm = { email: string; roleId: string; firstName: string; lastName: string; enabled: boolean }
 
 const ROLE_VARIANT: Record<string, 'default' | 'secondary' | 'outline'> = {
   'super admin': 'default',
   admin: 'secondary',
-  user: 'outline',
+  contributor: 'outline',
+  editor: 'secondary',
+  viewer: 'outline',
 }
 
 function RoleBadge({
@@ -110,10 +115,11 @@ function UserActions({
   )
 }
 
-const EMPTY_CREATE: CreateForm = { email: '', password: '', roleId: '' }
+const EMPTY_CREATE: CreateForm = { email: '', password: '', roleId: '', enabled: true }
 
 export function SettingsUsers() {
   const { user: currentUser, updateUser } = useAuth()
+  const { editorialMode } = useSettings()
   const { data: users, loading: loadingUsers, refetch } = useFetch<User[]>('/cms/admin/users')
   const { data: roles, loading: loadingRoles } = useFetch<Role[]>('/cms/admin/roles')
   const loading = loadingUsers || loadingRoles
@@ -128,15 +134,17 @@ export function SettingsUsers() {
     roleId: '',
     firstName: '',
     lastName: '',
+    enabled: true,
   })
 
   const [deleteUser, setDeleteUser] = useState<User | null>(null)
 
   const roleList = roles ?? []
   const currentIsSuperAdmin = currentUser?.role?.toLowerCase() === 'super admin'
+  const visibleRoles = roleList.filter((r) => editorialMode || !['Editor', 'Viewer'].includes(r.name))
   const assignableRoles = currentIsSuperAdmin
-    ? roleList
-    : roleList.filter((r) => r.name.toLowerCase() !== 'super admin')
+    ? visibleRoles
+    : visibleRoles.filter((r) => r.name.toLowerCase() !== 'super admin')
 
   const columns = useMemo<ColumnDef<User>[]>(
     () => [
@@ -167,6 +175,24 @@ export function SettingsUsers() {
         ),
       },
       {
+        accessorKey: 'enabled',
+        header: 'Enabled',
+        cell: ({ row, getValue }) => (
+          <Switch
+            checked={Boolean(getValue<boolean>() ?? true)}
+            onCheckedChange={async (checked) => {
+              try {
+                await request(`/cms/admin/users/${row.original.id}`, 'PUT', { enabled: checked })
+                refetch()
+              } catch {
+                /* surfaced by apiError */
+              }
+            }}
+            disabled={row.original.id === currentUser?.id || submitting}
+          />
+        ),
+      },
+      {
         id: 'actions',
         header: '',
         cell: ({ row }) => (
@@ -181,6 +207,7 @@ export function SettingsUsers() {
                 roleId: u.role_id,
                 firstName: u.first_name ?? '',
                 lastName: u.last_name ?? '',
+                enabled: u.enabled ?? true,
               })
             }}
             onDelete={setDeleteUser}
@@ -188,7 +215,7 @@ export function SettingsUsers() {
         ),
       },
     ],
-    [roleList, currentUser?.id, currentUser?.role],
+    [roleList, currentUser?.id, currentUser?.role, request, refetch, submitting],
   )
 
   const sortedUsers = useMemo(() => {
@@ -353,6 +380,14 @@ export function SettingsUsers() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="c-enabled">Enabled</Label>
+                <Switch
+                  id="c-enabled"
+                  checked={createForm.enabled}
+                  onCheckedChange={(v) => setCreateForm((p) => ({ ...p, enabled: v }))}
+                />
+              </div>
               {apiError && <p className="text-sm text-destructive">{apiError}</p>}
             </form>
             <DialogFooter>
@@ -421,6 +456,14 @@ export function SettingsUsers() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="e-enabled">Enabled</Label>
+                <Switch
+                  id="e-enabled"
+                  checked={editForm.enabled}
+                  onCheckedChange={(v) => setEditForm((p) => ({ ...p, enabled: v }))}
+                />
               </div>
               {apiError && <p className="text-sm text-destructive">{apiError}</p>}
             </form>

@@ -3,6 +3,7 @@ import { RotateCcwIcon, SaveIcon } from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { useAuth } from '@/context/auth.tsx'
+import { useSettings } from '@/context/settings.tsx'
 import { Spinner } from '@/components/ui/spinner.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { Button } from '@/components/ui/button.tsx'
@@ -68,6 +69,7 @@ function supportsAction(actions: readonly string[], action: string): boolean {
 
 export function SettingsRoles() {
   const { user } = useAuth()
+  const { editorialMode } = useSettings()
   const { data: roles, loading, refetch } = useFetch<Role[]>('/cms/admin/roles')
   const { request, loading: submitting } = useApi()
 
@@ -110,6 +112,8 @@ export function SettingsRoles() {
   const isSuperAdmin = user?.role === 'Super Admin'
   const editableRoles = (roles ?? [])
     .filter((r) => r.name !== 'Super Admin')
+    .filter((r) => r.name !== 'Viewer')
+    .filter((r) => editorialMode || !['Editor', 'Viewer'].includes(r.name))
     .sort((a, b) => {
       const ai = ROLE_DISPLAY_ORDER.indexOf(a.name as (typeof ROLE_DISPLAY_ORDER)[number])
       const bi = ROLE_DISPLAY_ORDER.indexOf(b.name as (typeof ROLE_DISPLAY_ORDER)[number])
@@ -256,12 +260,23 @@ export function SettingsRoles() {
             </TableBody>
           </Table>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          <span className="text-white font-bold uppercase">Note:</span> Editor and Contributor can
-          share the same base permissions, but their effective scope is different in the content
-          layer. Contributors are restricted to their own entries for certain actions, while Editors
-          can operate on entries more broadly depending on the configured rules.
-        </p>
+        {editorialMode && (
+          <div className="mt-3 rounded-md border bg-muted/30 p-3">
+            <p className="text-sm font-medium">Viewer</p>
+            <p className="text-sm text-muted-foreground">
+              Read-only role intended for external reviewers (for example, clients validating
+              content before approval).
+            </p>
+          </div>
+        )}
+        {editorialMode && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Note: Editor and Contributor can share the same base permissions, but their effective
+            scope is different in the content layer. Contributors are restricted to their own
+            entries for certain actions, while Editors can operate on entries more broadly
+            depending on the configured rules.
+          </p>
+        )}
 
         <Dialog open={resetOpen} onOpenChange={setResetOpen}>
           <DialogContent className="sm:max-w-sm">
