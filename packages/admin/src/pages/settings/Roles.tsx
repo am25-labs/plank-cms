@@ -55,6 +55,8 @@ const ACTIONS = [
 ] as const
 
 type PermissionMap = Record<string, Set<string>>
+const ROLE_DISPLAY_ORDER = ['Super Admin', 'Admin', 'Editor', 'Contributor'] as const
+const ROLE_GROUP_WIDTH_CLASS = 'w-44 min-w-44 max-w-44'
 
 function toMap(roles: Role[]): PermissionMap {
   return Object.fromEntries(roles.map((r) => [r.id, new Set(r.permissions)]))
@@ -106,7 +108,16 @@ export function SettingsRoles() {
   }
 
   const isSuperAdmin = user?.role === 'Super Admin'
-  const editableRoles = (roles ?? []).filter((r) => r.name !== 'Super Admin')
+  const editableRoles = (roles ?? [])
+    .filter((r) => r.name !== 'Super Admin')
+    .sort((a, b) => {
+      const ai = ROLE_DISPLAY_ORDER.indexOf(a.name as (typeof ROLE_DISPLAY_ORDER)[number])
+      const bi = ROLE_DISPLAY_ORDER.indexOf(b.name as (typeof ROLE_DISPLAY_ORDER)[number])
+      const aPos = ai === -1 ? Number.MAX_SAFE_INTEGER : ai
+      const bPos = bi === -1 ? Number.MAX_SAFE_INTEGER : bi
+      if (aPos !== bPos) return aPos - bPos
+      return a.name.localeCompare(b.name)
+    })
   const superAdminRole = (roles ?? []).find((r) => r.name === 'Super Admin')
 
   return (
@@ -137,13 +148,20 @@ export function SettingsRoles() {
                 <TableHead className="w-40" rowSpan={2} />
 
                 {superAdminRole && (
-                  <TableHead colSpan={3} className="border-l text-center">
+                  <TableHead
+                    colSpan={3}
+                    className={`border-l text-center ${ROLE_GROUP_WIDTH_CLASS}`}
+                  >
                     {superAdminRole.name}
                   </TableHead>
                 )}
 
                 {editableRoles.map((role) => (
-                  <TableHead key={role.id} colSpan={3} className="border-l">
+                  <TableHead
+                    key={role.id}
+                    colSpan={3}
+                    className={`border-l ${ROLE_GROUP_WIDTH_CLASS}`}
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <span>{role.name}</span>
                       <Button
@@ -238,6 +256,12 @@ export function SettingsRoles() {
             </TableBody>
           </Table>
         </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          <span className="text-white font-bold uppercase">Note:</span> Editor and Contributor can
+          share the same base permissions, but their effective scope is different in the content
+          layer. Contributors are restricted to their own entries for certain actions, while Editors
+          can operate on entries more broadly depending on the configured rules.
+        </p>
 
         <Dialog open={resetOpen} onOpenChange={setResetOpen}>
           <DialogContent className="sm:max-w-sm">
