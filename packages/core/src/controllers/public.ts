@@ -16,6 +16,12 @@ type Row = Record<string, unknown> & {
   _author_job_title?: string | null
   _author_organization?: string | null
   _author_country?: string | null
+  _editor_first_name?: string | null
+  _editor_last_name?: string | null
+  _editor_avatar_url?: string | null
+  _editor_job_title?: string | null
+  _editor_organization?: string | null
+  _editor_country?: string | null
 }
 type LocalizedValues = Record<string, Record<string, unknown>>
 
@@ -211,6 +217,10 @@ async function resolveAuthorAvatars(entries: Record<string, unknown>[]): Promise
       if (author?.avatar_url && !author.avatar_url.startsWith('http')) {
         author.avatar_url = await provider.getUrl(author.avatar_url)
       }
+      const editor = entry.editor as { avatar_url: string | null } | null
+      if (editor?.avatar_url && !editor.avatar_url.startsWith('http')) {
+        editor.avatar_url = await provider.getUrl(editor.avatar_url)
+      }
     }),
   )
 }
@@ -231,6 +241,12 @@ function serializeEntry(
     _author_job_title,
     _author_organization,
     _author_country,
+    _editor_first_name,
+    _editor_last_name,
+    _editor_avatar_url,
+    _editor_job_title,
+    _editor_organization,
+    _editor_country,
     ...rest
   } = row
   const source =
@@ -297,6 +313,17 @@ function serializeEntry(
           country: _author_country ?? null,
         }
       : null
+  out.editor =
+    _editor_first_name || _editor_last_name
+      ? {
+          first_name: _editor_first_name ?? null,
+          last_name: _editor_last_name ?? null,
+          avatar_url: _editor_avatar_url ?? null,
+          job_title: _editor_job_title ?? null,
+          organization: _editor_organization ?? null,
+          country: _editor_country ?? null,
+        }
+      : null
   return out
 }
 
@@ -317,9 +344,11 @@ export const listPublicEntries: SlugParam = async (req, res) => {
       statusParam === 'published' || statusParam === 'draft' ? `WHERE e.status = $1` : ''
     const values: unknown[] = statusClause ? [statusParam] : []
     const { rows } = await pool.query(
-      `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url, u.job_title AS _author_job_title, u.organization AS _author_organization, u.country AS _author_country
+      `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url, u.job_title AS _author_job_title, u.organization AS _author_organization, u.country AS _author_country,
+              ed.first_name AS _editor_first_name, ed.last_name AS _editor_last_name, ed.avatar_url AS _editor_avatar_url, ed.job_title AS _editor_job_title, ed.organization AS _editor_organization, ed.country AS _editor_country
        FROM ${ct.tableName} e
        LEFT JOIN plank_users u ON u.id = e.created_by
+       LEFT JOIN plank_users ed ON ed.id = e.editor_id
        ${statusClause} LIMIT 1`,
       values,
     )
@@ -378,9 +407,11 @@ export const listPublicEntries: SlugParam = async (req, res) => {
 
   const [{ rows }, { rows: countRows }] = await Promise.all([
     pool.query(
-      `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url, u.job_title AS _author_job_title, u.organization AS _author_organization, u.country AS _author_country
+      `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url, u.job_title AS _author_job_title, u.organization AS _author_organization, u.country AS _author_country,
+              ed.first_name AS _editor_first_name, ed.last_name AS _editor_last_name, ed.avatar_url AS _editor_avatar_url, ed.job_title AS _editor_job_title, ed.organization AS _editor_organization, ed.country AS _editor_country
        FROM ${ct.tableName} e
        LEFT JOIN plank_users u ON u.id = e.created_by
+       LEFT JOIN plank_users ed ON ed.id = e.editor_id
        ${where} ORDER BY e.${sortField} ${sortDir} LIMIT $${limitParam} OFFSET $${offsetParam}`,
       [...filterValues, limit, offset],
     ),
@@ -410,9 +441,11 @@ export const getPublicEntry: SlugIdParam = async (req, res) => {
   const values: unknown[] = statusClause ? [req.params.id, statusParam] : [req.params.id]
 
   const { rows } = await pool.query(
-    `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url, u.job_title AS _author_job_title, u.organization AS _author_organization, u.country AS _author_country
+    `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url, u.job_title AS _author_job_title, u.organization AS _author_organization, u.country AS _author_country,
+            ed.first_name AS _editor_first_name, ed.last_name AS _editor_last_name, ed.avatar_url AS _editor_avatar_url, ed.job_title AS _editor_job_title, ed.organization AS _editor_organization, ed.country AS _editor_country
      FROM ${ct.tableName} e
      LEFT JOIN plank_users u ON u.id = e.created_by
+     LEFT JOIN plank_users ed ON ed.id = e.editor_id
      WHERE e.id = $1${statusClause}`,
     values,
   )

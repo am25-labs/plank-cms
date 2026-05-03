@@ -35,6 +35,7 @@ type UserRow = {
   country: string | null
   two_factor_enabled: boolean
   two_factor_secret: string | null
+  enabled: boolean
   session_version: number
 }
 type CountRow = { count: string }
@@ -207,7 +208,7 @@ export async function login(req: Request, res: Response): Promise<void> {
   }
 
   const { rows } = await pool.query<UserRow>(
-    `SELECT id, email, password, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, session_version
+    `SELECT id, email, password, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, enabled, session_version
      FROM plank_users
      WHERE email = $1`,
     [email],
@@ -216,6 +217,10 @@ export async function login(req: Request, res: Response): Promise<void> {
   const user = rows[0]
   if (!user || !(await bcrypt.compare(password, user.password))) {
     res.status(401).json({ error: 'Invalid credentials' })
+    return
+  }
+  if (!user.enabled) {
+    res.status(403).json({ error: 'User is disabled' })
     return
   }
 
@@ -279,11 +284,15 @@ export async function loginWithTwoFactor(req: Request, res: Response): Promise<v
   }
 
   const { rows } = await pool.query<UserRow>(
-    `SELECT id, email, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, password, session_version
+    `SELECT id, email, role_id, first_name, last_name, avatar_url, job_title, organization, country, two_factor_enabled, two_factor_secret, password, enabled, session_version
      FROM plank_users WHERE id = $1`,
     [payload.sub],
   )
   const user = rows[0]
+  if (user && !user.enabled) {
+    res.status(403).json({ error: 'User is disabled' })
+    return
+  }
   if (!user || !user.two_factor_enabled || !user.two_factor_secret) {
     res.status(401).json({ error: '2FA is not enabled for this account' })
     return

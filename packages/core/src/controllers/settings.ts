@@ -1,5 +1,7 @@
 import type { Request, Response } from 'express'
+import { pool } from '@plank-cms/db'
 import { getSettings, setSettings } from '../lib/settings.js'
+import { resolveAppModes } from '../lib/appModes.js'
 
 // Sensitive fields are masked in GET responses — never returned to the client
 const SENSITIVE_FIELDS: Record<string, Set<string>> = {
@@ -23,6 +25,16 @@ export async function getNamespaceSettings(req: Request<{ namespace: string }>, 
   res.json(maskSettings(namespace, settings))
 }
 
+export async function getAppModes(req: Request, res: Response): Promise<void> {
+  const modes = req.appModes ?? (await resolveAppModes())
+  res.json(modes)
+}
+
+export async function getEditorialMode(_req: Request, res: Response): Promise<void> {
+  const { editorial: enabled } = await resolveAppModes()
+  res.json({ enabled })
+}
+
 export async function updateNamespaceSettings(req: Request<{ namespace: string }>, res: Response): Promise<void> {
   const { namespace } = req.params
   const incoming = req.body as Record<string, string>
@@ -42,6 +54,20 @@ export async function updateNamespaceSettings(req: Request<{ namespace: string }
   }
 
   await setSettings(namespace, toSave)
+
+  if (
+    namespace === 'general' &&
+    Object.prototype.hasOwnProperty.call(toSave, 'editorial_mode') &&
+    String(toSave.editorial_mode).toLowerCase() === 'false'
+  ) {
+    await pool.query(
+      `UPDATE plank_users
+       SET enabled = FALSE, session_version = session_version + 1
+       WHERE role_id IN (
+         SELECT id FROM plank_roles WHERE LOWER(name) IN ('editor', 'viewer')
+       )`,
+    )
+  }
 
   const updated = await getSettings(namespace)
   res.json(maskSettings(namespace, updated))

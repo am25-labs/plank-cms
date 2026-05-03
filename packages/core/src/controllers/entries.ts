@@ -142,9 +142,11 @@ export const listEntries: SlugParam = async (req, res) => {
 
   const [{ rows }, { rows: countRows }] = await Promise.all([
     pool.query(
-      `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url
+      `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url,
+              ed.first_name AS _editor_first_name, ed.last_name AS _editor_last_name, ed.avatar_url AS _editor_avatar_url
        FROM ${quotedTableName} e
        LEFT JOIN plank_users u ON u.id = e.created_by
+       LEFT JOIN plank_users ed ON ed.id = e.editor_id
        ORDER BY e.${quotedSortField} ${sortDir}
        LIMIT $1 OFFSET $2`,
       [limit, offset],
@@ -176,6 +178,10 @@ export const listEntries: SlugParam = async (req, res) => {
       const key = resolved._author_avatar_url as string | null
       if (key && !key.startsWith('http')) {
         resolved._author_avatar_url = await provider.getUrl(key)
+      }
+      const editorKey = resolved._editor_avatar_url as string | null
+      if (editorKey && !editorKey.startsWith('http')) {
+        resolved._editor_avatar_url = await provider.getUrl(editorKey)
       }
       return normalizeNavigationFields({ ...resolved, ...mmIds }, ct.fields)
     }),
@@ -230,7 +236,15 @@ export const getEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const { rows } = await pool.query(`SELECT * FROM ${quotedTableName} WHERE id = $1`, [req.params.id])
+  const { rows } = await pool.query(
+    `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url,
+            ed.first_name AS _editor_first_name, ed.last_name AS _editor_last_name, ed.avatar_url AS _editor_avatar_url
+     FROM ${quotedTableName} e
+     LEFT JOIN plank_users u ON u.id = e.created_by
+     LEFT JOIN plank_users ed ON ed.id = e.editor_id
+     WHERE e.id = $1`,
+    [req.params.id],
+  )
 
   if (!rows[0]) {
     res.status(404).json({ error: 'Entry not found' })
@@ -243,6 +257,8 @@ export const getEntry: SlugIdParam = async (req, res) => {
   const resolved = resolveLocalizedRow(rows[0], ct, locale, fallbacks)
   const key = resolved._author_avatar_url as string | null
   if (key && !key.startsWith('http')) resolved._author_avatar_url = await provider.getUrl(key)
+  const editorKey = resolved._editor_avatar_url as string | null
+  if (editorKey && !editorKey.startsWith('http')) resolved._editor_avatar_url = await provider.getUrl(editorKey)
   res.json(normalizeNavigationFields({ ...resolved, ...mmIds }, ct.fields))
 }
 
@@ -410,6 +426,7 @@ export const updateEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
+  const editorialMode = req.appModes?.editorial ?? false
   const currentRole = await roleName(req.user?.roleId)
   const isContributor = currentRole === 'contributor'
   const isEditor = currentRole === 'editor'
@@ -418,8 +435,8 @@ export const updateEntry: SlugIdParam = async (req, res) => {
     return
   }
   if ((isContributor || isEditor) && ct.kind === 'collection') {
-    const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
-      `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
+    const { rows: authorRows } = await pool.query<{ created_by: string | null; status: string | null }>(
+      `SELECT created_by, status FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
     )
     if (!authorRows[0]) {
@@ -428,6 +445,10 @@ export const updateEntry: SlugIdParam = async (req, res) => {
     }
     if (authorRows[0].created_by !== req.user?.id) {
       res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    if (editorialMode && isContributor && authorRows[0].status === 'in_review') {
+      res.status(403).json({ error: 'Entry is currently in review and locked for contributor edits' })
       return
     }
   }
@@ -510,9 +531,27 @@ function buildSnapshotExpr(tableName: string): string {
 }
 
 export const patchEntryStatus: SlugIdParam = async (req, res) => {
-  const { status, scheduled_for } = req.body as { status: unknown; scheduled_for?: unknown }
-  if (status !== 'draft' && status !== 'published' && status !== 'scheduled') {
-    res.status(400).json({ error: 'status must be draft, published, or scheduled' })
+  const {
+    status,
+    scheduled_for,
+    editor_id,
+    review_locked_by_editor,
+    review_rejected,
+  } = req.body as {
+    status: unknown
+    scheduled_for?: unknown
+    editor_id?: unknown
+    review_locked_by_editor?: unknown
+    review_rejected?: unknown
+  }
+  if (
+    status !== 'draft' &&
+    status !== 'published' &&
+    status !== 'scheduled' &&
+    status !== 'pending' &&
+    status !== 'in_review'
+  ) {
+    res.status(400).json({ error: 'status must be draft, published, scheduled, pending, or in_review' })
     return
   }
 
@@ -535,14 +574,19 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isContributor = await isContributorRole(req.user?.roleId)
+  const editorialMode = req.appModes?.editorial ?? false
+  const currentRole = await roleName(req.user?.roleId)
+  const isContributor = currentRole === 'contributor'
+  const isAdminRole = currentRole === 'admin' || currentRole === 'super admin'
+  const isEditorRole = currentRole === 'editor'
+
   if (isContributor && ct.kind === 'single') {
     res.status(403).json({ error: 'Single types are read-only for Contributor role' })
     return
   }
   if (isContributor && ct.kind === 'collection') {
-    const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
-      `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
+    const { rows: authorRows } = await pool.query<{ created_by: string | null; review_locked_by_editor: boolean }>(
+      `SELECT created_by, review_locked_by_editor FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
     )
     if (!authorRows[0]) {
@@ -553,6 +597,20 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
       res.status(403).json({ error: 'Forbidden' })
       return
     }
+    // Allow contributors to re-submit to pending even if entry is currently locked.
+    if (editorialMode && authorRows[0].review_locked_by_editor && status !== 'pending') {
+      res.status(403).json({ error: 'Entry is currently locked for contributor edits' })
+      return
+    }
+  }
+
+  if (editorialMode && isContributor && status === 'published') {
+    res.status(403).json({ error: 'Contributors cannot publish in editorial mode' })
+    return
+  }
+  if (editorialMode && isContributor && status === 'scheduled') {
+    res.status(403).json({ error: 'Contributors cannot schedule in editorial mode' })
+    return
   }
 
   let sql: string
@@ -565,6 +623,7 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
         published_data = ${buildSnapshotExpr(ct.tableName)},
         published_at = NOW(),
         scheduled_for = NULL,
+        review_rejected = FALSE,
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
@@ -575,11 +634,76 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
       UPDATE ${quotedTableName} SET
         status = 'scheduled',
         scheduled_for = $2,
+        review_rejected = FALSE,
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
     `
     values = [req.params.id, scheduled_for]
+  } else if (status === 'pending') {
+    sql = `
+      UPDATE ${quotedTableName} SET
+        status = 'pending',
+        review_rejected = COALESCE($2, FALSE),
+        review_locked_by_editor = FALSE,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `
+    values = [req.params.id, typeof review_rejected === 'boolean' ? review_rejected : false]
+  } else if (status === 'in_review') {
+    if (!editorialMode) {
+      res.status(403).json({ error: 'In review status requires editorial mode' })
+      return
+    }
+    if (!isAdminRole && !isEditorRole) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    const requestedEditorId =
+      typeof editor_id === 'string' && editor_id.trim().length > 0
+        ? editor_id
+        : isEditorRole
+          ? req.user?.id ?? null
+          : null
+    if (isEditorRole && requestedEditorId && requestedEditorId !== req.user?.id) {
+      res.status(403).json({ error: 'Editors can only assign themselves' })
+      return
+    }
+    if (requestedEditorId) {
+      const { rows: editorRows } = await pool.query<{ role_name: string }>(
+        `SELECT r.name as role_name
+         FROM plank_users u
+         JOIN plank_roles r ON r.id = u.role_id
+         WHERE u.id = $1`,
+        [requestedEditorId],
+      )
+      const targetRole = editorRows[0]?.role_name?.toLowerCase()
+      if (isAdminRole) {
+        if (requestedEditorId !== req.user?.id && targetRole !== 'editor') {
+          res.status(403).json({ error: 'Admins can assign only themselves or Editors' })
+          return
+        }
+      } else if (targetRole !== 'editor') {
+        res.status(403).json({ error: 'Invalid editor assignee' })
+        return
+      }
+    }
+    const nextEditorId =
+      requestedEditorId ??
+      (isEditorRole ? req.user?.id ?? null : null)
+    const lock = typeof review_locked_by_editor === 'boolean' ? review_locked_by_editor : false
+    sql = `
+      UPDATE ${quotedTableName} SET
+        status = 'in_review',
+        editor_id = COALESCE($2, editor_id),
+        review_locked_by_editor = $3,
+        review_rejected = FALSE,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING *
+    `
+    values = [req.params.id, nextEditorId, lock]
   } else {
     sql = `
       UPDATE ${quotedTableName} SET
@@ -587,6 +711,8 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
         published_data = NULL,
         published_at = NULL,
         scheduled_for = NULL,
+        review_rejected = FALSE,
+        review_locked_by_editor = FALSE,
         updated_at = NOW()
       WHERE id = $1
       RETURNING *
@@ -617,12 +743,14 @@ export const deleteEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isContributor = await isContributorRole(req.user?.roleId)
+  const currentRole = await roleName(req.user?.roleId)
+  const isContributor = currentRole === 'contributor'
+  const isEditor = currentRole === 'editor'
   if (isContributor && ct.kind === 'single') {
     res.status(403).json({ error: 'Single types are read-only for Contributor role' })
     return
   }
-  if (isContributor && ct.kind === 'collection') {
+  if ((isContributor || isEditor) && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
       `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],

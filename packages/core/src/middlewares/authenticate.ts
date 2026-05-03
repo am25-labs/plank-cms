@@ -57,11 +57,11 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     if (typeof payload.sv !== 'number') {
       return { ok: false }
     }
-    const { rows } = await pool.query<{ session_version: number }>(
-      'SELECT session_version FROM plank_users WHERE id = $1',
+    const { rows } = await pool.query<{ session_version: number; enabled: boolean }>(
+      'SELECT session_version, enabled FROM plank_users WHERE id = $1',
       [payload.sub],
     )
-    if (!rows[0] || rows[0].session_version !== payload.sv) {
+    if (!rows[0] || !rows[0].enabled || rows[0].session_version !== payload.sv) {
       return { ok: false }
     }
     return { ok: true, sessionVersion: rows[0].session_version }

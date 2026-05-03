@@ -18,4 +18,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'entries:read', 'entries:write', 'entries:delete',
     'media:read', 'media:write',
   ],
+  'Viewer': [
+    'content-types:read',
+    'entries:read',
+    'media:read',
+  ],
 }

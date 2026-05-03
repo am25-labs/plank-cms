@@ -6,11 +6,13 @@ import { randomBytes } from 'node:crypto'
 import { z, flattenError } from 'zod'
 import { getProvider } from '../media/index.js'
 import { decrypt, encrypt } from '../lib/encrypt.js'
+import { resolveAppModes } from '../lib/appModes.js'
 
 const CreateUserSchema = z.object({
   email: z.email(),
   password: z.string().min(8),
   roleId: z.string().min(1),
+  enabled: z.boolean().optional(),
 })
 
 const UpdateUserSchema = z.object({
@@ -18,6 +20,7 @@ const UpdateUserSchema = z.object({
   roleId: z.string().min(1).optional(),
   firstName: z.string().max(100).nullable().optional(),
   lastName: z.string().max(100).nullable().optional(),
+  enabled: z.boolean().optional(),
 })
 
 const ChangePasswordSchema = z.object({
@@ -47,7 +50,7 @@ const RegenerateBackupCodesSchema = z.object({
   code: z.string().trim().length(6),
 })
 
-type UserRow = { id: string; email: string; role_id: string; role_name?: string; first_name: string | null; last_name: string | null; avatar_url: string | null; job_title: string | null; organization: string | null; country: string | null; two_factor_enabled: boolean; two_factor_secret: string | null; two_factor_temp_secret: string | null; created_at: Date }
+type UserRow = { id: string; email: string; role_id: string; role_name?: string; first_name: string | null; last_name: string | null; avatar_url: string | null; job_title: string | null; organization: string | null; country: string | null; two_factor_enabled: boolean; two_factor_secret: string | null; two_factor_temp_secret: string | null; enabled?: boolean; created_at: Date }
 
 const BACKUP_CODE_COUNT = 8
 const BACKUP_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -91,7 +94,7 @@ async function roleNameById(roleId: string): Promise<string | null> {
 
 export async function listUsers(_req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query<UserRow>(
-    `SELECT u.id, u.email, u.role_id, r.name as role_name, u.first_name, u.last_name, u.created_at
+    `SELECT u.id, u.email, u.role_id, r.name as role_name, u.first_name, u.last_name, u.enabled, u.created_at
      FROM plank_users u
      JOIN plank_roles r ON r.id = u.role_id
      ORDER BY u.created_at DESC`,
@@ -102,7 +105,7 @@ export async function listUsers(_req: Request, res: Response): Promise<void> {
 export async function getMe(req: Request, res: Response): Promise<void> {
   const { rows } = await pool.query<UserRow & { permissions: string[]; role_name: string }>(
     `SELECT u.id, u.email, u.role_id, u.first_name, u.last_name, u.avatar_url,
-            u.job_title, u.organization, u.country, u.two_factor_enabled, u.created_at,
+            u.job_title, u.organization, u.country, u.two_factor_enabled, u.enabled, u.created_at,
             r.name AS role_name, r.permissions
      FROM plank_users u
      JOIN plank_roles r ON r.id = u.role_id
@@ -111,11 +114,14 @@ export async function getMe(req: Request, res: Response): Promise<void> {
   )
   if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
   const resolved = await resolveAvatarUrl(rows[0])
+  const modes = req.appModes ?? (await resolveAppModes())
   res.json({
     ...resolved,
     role: rows[0].role_name,
     permissions: rows[0].permissions,
+    enabled: rows[0].enabled ?? true,
     two_factor_enabled: rows[0].two_factor_enabled,
+    modes,
   })
 }
 
@@ -394,20 +400,23 @@ export async function createUser(req: Request, res: Response): Promise<void> {
     return
   }
 
-  const { email, password, roleId } = parsed.data
+  const { email, password, roleId, enabled } = parsed.data
   const requesterRoleName = await roleNameById(req.user!.roleId)
   const targetRoleName = await roleNameById(roleId)
   if (targetRoleName === 'Super Admin' && requesterRoleName !== 'Super Admin') {
     res.status(403).json({ error: 'Only Super Admin can assign Super Admin role' }); return
   }
+  const editorialMode = req.appModes?.editorial ?? false
+  const isEditorialExclusiveRole = ['Editor', 'Viewer'].includes(targetRoleName ?? '')
+  const nextEnabled = editorialMode || !isEditorialExclusiveRole ? (enabled ?? true) : false
   const hashed = await bcrypt.hash(password, 12)
   const id = createId()
 
   await pool.query(
-    'INSERT INTO plank_users (id, email, password, role_id) VALUES ($1, $2, $3, $4)',
-    [id, email, hashed, roleId],
+    'INSERT INTO plank_users (id, email, password, role_id, enabled) VALUES ($1, $2, $3, $4, $5)',
+    [id, email, hashed, roleId, nextEnabled],
   )
-  res.status(201).json({ id, email, roleId })
+  res.status(201).json({ id, email, roleId, enabled: nextEnabled })
 }
 
 export async function updateUser(req: Request, res: Response): Promise<void> {
@@ -417,7 +426,7 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
     return
   }
 
-  const { email, roleId, firstName, lastName } = parsed.data
+  const { email, roleId, firstName, lastName, enabled } = parsed.data
   const requesterRoleName = await roleNameById(req.user!.roleId)
   const { rows: targetRows } = await pool.query<{ role_id: string }>(
     'SELECT role_id FROM plank_users WHERE id = $1',
@@ -428,10 +437,15 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
   if (targetCurrentRoleName === 'Super Admin' && requesterRoleName !== 'Super Admin') {
     res.status(403).json({ error: 'Only Super Admin can edit Super Admin users' }); return
   }
+  const editorialMode = req.appModes?.editorial ?? false
+  let resolvedEnabled: boolean | undefined = enabled
   if (roleId) {
     const nextRoleName = await roleNameById(roleId)
     if (nextRoleName === 'Super Admin' && requesterRoleName !== 'Super Admin') {
       res.status(403).json({ error: 'Only Super Admin can assign Super Admin role' }); return
+    }
+    if (!editorialMode && ['Editor', 'Viewer'].includes(nextRoleName ?? '')) {
+      resolvedEnabled = false
     }
   }
   const { rows } = await pool.query<UserRow>(
@@ -439,10 +453,15 @@ export async function updateUser(req: Request, res: Response): Promise<void> {
      SET email      = COALESCE($1, email),
          role_id    = COALESCE($2, role_id),
          first_name = COALESCE($3, first_name),
-         last_name  = COALESCE($4, last_name)
-     WHERE id = $5
-     RETURNING id, email, role_id, first_name, last_name, created_at`,
-    [email ?? null, roleId ?? null, firstName ?? null, lastName ?? null, req.params.id],
+         last_name  = COALESCE($4, last_name),
+         enabled    = COALESCE($5, enabled),
+         session_version = CASE
+           WHEN $5 IS NOT NULL AND $5 = FALSE AND enabled = TRUE THEN session_version + 1
+           ELSE session_version
+         END
+     WHERE id = $6
+     RETURNING id, email, role_id, first_name, last_name, enabled, created_at`,
+    [email ?? null, roleId ?? null, firstName ?? null, lastName ?? null, resolvedEnabled ?? null, req.params.id],
   )
   if (!rows[0]) { res.status(404).json({ error: 'User not found' }); return }
   res.json(rows[0])
