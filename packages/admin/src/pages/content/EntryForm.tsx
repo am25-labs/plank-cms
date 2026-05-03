@@ -38,6 +38,8 @@ type ContentType = {
 }
 
 type Entry = Record<string, unknown> & {
+  id?: string
+  created_by?: string | null
   status?: 'draft' | 'scheduled' | 'published'
   published_data?: Record<string, unknown> | null
   scheduled_for?: string | null
@@ -434,9 +436,15 @@ export function EntryForm() {
   const permissions = user?.permissions ?? []
   const canWriteEntries = permissions.includes('*') || permissions.includes('entries:write')
   const canDeleteEntries = permissions.includes('*') || permissions.includes('entries:delete')
-  const isUserRole = user?.role?.toLowerCase() === 'user'
-  const isReadOnlySingle = isUserRole && ct?.kind === 'single'
-  const readOnly = !canWriteEntries || isReadOnlySingle
+  const isContributorRole = user?.role?.toLowerCase() === 'contributor'
+  const isEditorRole = user?.role?.toLowerCase() === 'editor'
+  const isOwnershipRestrictedDeleteRole = isContributorRole || isEditorRole
+  const isReadOnlySingle = isContributorRole && ct?.kind === 'single'
+  const isOwnEntry = isNew || String(existing?.created_by ?? '') === String(user?.id ?? '')
+  const readOnlyByOwnership = isContributorRole && !isOwnEntry
+  const readOnly = !canWriteEntries || isReadOnlySingle || readOnlyByOwnership
+  const canDeleteCurrentEntry =
+    canDeleteEntries && (!isOwnershipRestrictedDeleteRole || isOwnEntry)
   const canPublish = isDirty || status === 'draft' || status === 'scheduled' || isPublishedStale
   const canSchedule = !!(schedDate && schedTime)
 
@@ -491,7 +499,7 @@ export function EntryForm() {
             <p className="text-muted-foreground text-xs mt-1">{ct.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            {!isNew && canDeleteEntries && !isReadOnlySingle && (
+            {!isNew && canDeleteCurrentEntry && !isReadOnlySingle && (
               <Button
                 variant="ghost"
                 size="icon"

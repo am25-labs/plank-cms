@@ -104,10 +104,16 @@ async function syncManyToMany(
 type SlugParam = RequestHandler<{ slug: string }>
 type SlugIdParam = RequestHandler<{ slug: string; id: string }>
 
-async function isUserRole(roleId: string | undefined): Promise<boolean> {
+async function isContributorRole(roleId: string | undefined): Promise<boolean> {
   if (!roleId) return false
   const { rows } = await pool.query<{ name: string }>('SELECT name FROM plank_roles WHERE id = $1', [roleId])
-  return rows[0]?.name?.toLowerCase() === 'user'
+  return rows[0]?.name?.toLowerCase() === 'contributor'
+}
+
+async function roleName(roleId: string | undefined): Promise<string> {
+  if (!roleId) return ''
+  const { rows } = await pool.query<{ name: string }>('SELECT name FROM plank_roles WHERE id = $1', [roleId])
+  return rows[0]?.name?.toLowerCase() ?? ''
 }
 
 export const listEntries: SlugParam = async (req, res) => {
@@ -119,7 +125,6 @@ export const listEntries: SlugParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isUser = await isUserRole(req.user?.roleId)
   const page = Math.max(1, parseInt(String(req.query.page ?? 1)))
   const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? 20))))
   const offset = (page - 1) * limit
@@ -135,22 +140,16 @@ export const listEntries: SlugParam = async (req, res) => {
   const locale = req.query.locale ? String(req.query.locale) : undefined
   const fallbacks = req.query.fallback ? String(req.query.fallback).split(',') : []
 
-  const ownCollectionOnly = isUser && ct.kind === 'collection'
-  const whereClause = ownCollectionOnly ? 'WHERE e.created_by = $3' : ''
-  const countWhereClause = ownCollectionOnly ? 'WHERE created_by = $1' : ''
-  const listValues = ownCollectionOnly ? [limit, offset, req.user?.id ?? null] : [limit, offset]
-  const countValues = ownCollectionOnly ? [req.user?.id ?? null] : []
   const [{ rows }, { rows: countRows }] = await Promise.all([
     pool.query(
       `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url
        FROM ${quotedTableName} e
        LEFT JOIN plank_users u ON u.id = e.created_by
-       ${whereClause}
        ORDER BY e.${quotedSortField} ${sortDir}
        LIMIT $1 OFFSET $2`,
-      listValues,
+      [limit, offset],
     ),
-    pool.query(`SELECT COUNT(*) as count FROM ${quotedTableName} ${countWhereClause}`, countValues),
+    pool.query(`SELECT COUNT(*) as count FROM ${quotedTableName}`),
   ])
 
   const provider = await getProvider()
@@ -231,15 +230,10 @@ export const getEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isUser = await isUserRole(req.user?.roleId)
   const { rows } = await pool.query(`SELECT * FROM ${quotedTableName} WHERE id = $1`, [req.params.id])
 
   if (!rows[0]) {
     res.status(404).json({ error: 'Entry not found' })
-    return
-  }
-  if (isUser && ct.kind === 'collection' && rows[0].created_by !== req.user?.id) {
-    res.status(403).json({ error: 'Forbidden' })
     return
   }
   const locale = req.query.locale ? String(req.query.locale) : undefined
@@ -263,9 +257,9 @@ export const createEntry: SlugParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isUser = await isUserRole(req.user?.roleId)
-  if (isUser && ct.kind === 'single') {
-    res.status(403).json({ error: 'Single types are read-only for User role' })
+  const isContributor = await isContributorRole(req.user?.roleId)
+  if (isContributor && ct.kind === 'single') {
+    res.status(403).json({ error: 'Single types are read-only for Contributor role' })
     return
   }
 
@@ -416,12 +410,14 @@ export const updateEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isUser = await isUserRole(req.user?.roleId)
-  if (isUser && ct.kind === 'single') {
-    res.status(403).json({ error: 'Single types are read-only for User role' })
+  const currentRole = await roleName(req.user?.roleId)
+  const isContributor = currentRole === 'contributor'
+  const isEditor = currentRole === 'editor'
+  if (isContributor && ct.kind === 'single') {
+    res.status(403).json({ error: 'Single types are read-only for Contributor role' })
     return
   }
-  if (isUser && ct.kind === 'collection') {
+  if ((isContributor || isEditor) && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
       `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
@@ -539,12 +535,12 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isUser = await isUserRole(req.user?.roleId)
-  if (isUser && ct.kind === 'single') {
-    res.status(403).json({ error: 'Single types are read-only for User role' })
+  const isContributor = await isContributorRole(req.user?.roleId)
+  if (isContributor && ct.kind === 'single') {
+    res.status(403).json({ error: 'Single types are read-only for Contributor role' })
     return
   }
-  if (isUser && ct.kind === 'collection') {
+  if (isContributor && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
       `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],
@@ -621,12 +617,12 @@ export const deleteEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const quotedTableName = quoteIdentifier(ct.tableName)
-  const isUser = await isUserRole(req.user?.roleId)
-  if (isUser && ct.kind === 'single') {
-    res.status(403).json({ error: 'Single types are read-only for User role' })
+  const isContributor = await isContributorRole(req.user?.roleId)
+  if (isContributor && ct.kind === 'single') {
+    res.status(403).json({ error: 'Single types are read-only for Contributor role' })
     return
   }
-  if (isUser && ct.kind === 'collection') {
+  if (isContributor && ct.kind === 'collection') {
     const { rows: authorRows } = await pool.query<{ created_by: string | null }>(
       `SELECT created_by FROM ${quotedTableName} WHERE id = $1`,
       [req.params.id],

@@ -783,6 +783,21 @@ export function EntriesList() {
   const permissions = user?.permissions ?? []
   const canWriteEntries = permissions.includes('*') || permissions.includes('entries:write')
   const canDeleteEntries = permissions.includes('*') || permissions.includes('entries:delete')
+  const isContributorRole = user?.role?.toLowerCase() === 'contributor'
+  const isEditorRole = user?.role?.toLowerCase() === 'editor'
+  const isOwnershipRestrictedDeleteRole = isContributorRole || isEditorRole
+  const isOwnEntry = (entry: Entry) => String(entry.created_by ?? '') === String(user?.id ?? '')
+  const canEditEntry = (entry: Entry) => canWriteEntries && (!isContributorRole || isOwnEntry(entry))
+  const canDeleteEntry = (entry: Entry) =>
+    canDeleteEntries && (!isOwnershipRestrictedDeleteRole || isOwnEntry(entry))
+  const editableSelectedIds = [...selected].filter((id) => {
+    const entry = (entries?.data ?? []).find((e) => e.id === id)
+    return entry ? canEditEntry(entry) : false
+  })
+  const deletableSelectedIds = [...selected].filter((id) => {
+    const entry = (entries?.data ?? []).find((e) => e.id === id)
+    return entry ? canDeleteEntry(entry) : false
+  })
 
   const currentIds = (entries?.data ?? []).map((e) => e.id)
   const allSelected = currentIds.length > 0 && currentIds.every((id) => selected.has(id))
@@ -816,7 +831,7 @@ export function EntriesList() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       }
       await Promise.all(
-        [...selected].map((id) =>
+        editableSelectedIds.map((id) =>
           fetch(`/cms/admin/entries/${slug}/${id}/status`, {
             method: 'PATCH',
             headers,
@@ -838,7 +853,7 @@ export function EntriesList() {
       const token = localStorage.getItem('plank_token')
       const headers: HeadersInit = { ...(token ? { Authorization: `Bearer ${token}` } : {}) }
       await Promise.all(
-        [...selected].map((id) =>
+        deletableSelectedIds.map((id) =>
           fetch(`/cms/admin/entries/${slug}/${id}`, { method: 'DELETE', headers }),
         ),
       )
@@ -923,7 +938,7 @@ export function EntriesList() {
                   <Button
                     variant="outline"
                     size="sm"
-                    disabled={bulkLoading}
+                    disabled={bulkLoading || editableSelectedIds.length === 0}
                     onClick={handleBulkUnpublish}
                   >
                     {bulkLoading ? <Spinner className="size-3.5" /> : null}
@@ -933,7 +948,7 @@ export function EntriesList() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      disabled={bulkLoading}
+                      disabled={bulkLoading || deletableSelectedIds.length === 0}
                       onClick={() => setBulkConfirmDelete(true)}
                     >
                       <Trash2Icon className="size-3.5" />
@@ -985,7 +1000,7 @@ export function EntriesList() {
                   {(entries?.data ?? []).map((entry) => (
                     <TableRow
                       key={entry.id}
-                      className={`group transition-colors ${selected.has(entry.id) ? 'bg-muted/40' : 'hover:bg-muted/30'}`}
+                      className={`group transition-colors ${selected.has(entry.id) ? 'bg-muted/40' : 'hover:bg-muted/30'} ${isContributorRole && !isOwnEntry(entry) ? 'opacity-60' : ''}`}
                     >
                       <TableCell className="w-10 px-4 py-3">
                         <Checkbox
@@ -1046,11 +1061,12 @@ export function EntriesList() {
                             size="icon"
                             variant="ghost"
                             onClick={() => navigate(`/content/${slug}/${entry.id}`)}
+                            disabled={!canEditEntry(entry)}
                             className="flex size-8 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                           >
                             <PencilIcon className="size-3.5" />
                           </Button>
-                          {canDeleteEntries && (
+                          {canDeleteEntry(entry) && (
                             <Button
                               size="icon"
                               variant="ghost"

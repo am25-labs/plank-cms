@@ -8,9 +8,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     'settings:users:read', 'settings:users:write', 'settings:users:delete',
     'settings:webhooks:read', 'settings:webhooks:write', 'settings:webhooks:delete',
   ],
-  'User': [
+  'Contributor': [
     'content-types:read',
-    'entries:read', 'entries:write',
+    'entries:read', 'entries:write', 'entries:delete',
+    'media:read', 'media:write',
+  ],
+  'Editor': [
+    'content-types:read',
+    'entries:read', 'entries:write', 'entries:delete',
     'media:read', 'media:write',
   ],
 }

@@ -26,10 +26,10 @@ export function ContentSlugIndex() {
   useEffect(() => {
     if (!isSingle) return
     if (loadingEntry) return
-    const isUserRole = user?.role?.toLowerCase() === 'user'
+    const isContributorRole = user?.role?.toLowerCase() === 'contributor'
     if (entry) {
       navigate(`/content/${slug}/${entry.id}`, { replace: true })
-    } else if (entryError && !isUserRole) {
+    } else if (entryError && !isContributorRole) {
       navigate(`/content/${slug}/new`, { replace: true })
     }
   }, [isSingle, loadingEntry, entry, entryError, slug, navigate, user?.role])
