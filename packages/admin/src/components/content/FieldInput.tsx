@@ -111,6 +111,7 @@ type FieldInputProps = {
   onChange: (value: unknown) => void
   allValues: Record<string, unknown>
   disabled?: boolean
+  errorMessage?: string
 }
 
 const ACCEPT_MAP: Record<string, string> = {
@@ -1754,7 +1755,14 @@ function RichTextInput({
   )
 }
 
-export function FieldInput({ field, value, onChange, allValues, disabled }: FieldInputProps) {
+export function FieldInput({
+  field,
+  value,
+  onChange,
+  allValues,
+  disabled,
+  errorMessage,
+}: FieldInputProps) {
   const lastAutoUid = useRef<string | null>(null)
   const { timezone } = useSettings()
 
@@ -1921,15 +1929,22 @@ export function FieldInput({ field, value, onChange, allValues, disabled }: Fiel
 
   if (field.type === 'uid') {
     return (
-      <Input
-        className={cn(sharedClass, 'text-base md:text-base')}
-        value={String(value ?? '')}
-        placeholder="auto-generated"
-        onChange={(e) => {
-          onChange(e.target.value)
-        }}
-        disabled={Boolean(disabled)}
-      />
+      <div>
+        <Input
+          className={cn(
+            sharedClass,
+            'text-base md:text-base',
+            errorMessage ? 'border-destructive focus-visible:ring-destructive/20' : '',
+          )}
+          value={String(value ?? '')}
+          placeholder="auto-generated"
+          onChange={(e) => {
+            onChange(e.target.value)
+          }}
+          disabled={Boolean(disabled)}
+        />
+        {errorMessage && <p className="mt-1 text-xs text-destructive">{errorMessage}</p>}
+      </div>
     )
   }
 

@@ -2,6 +2,20 @@ import type { Request, Response, NextFunction } from 'express'
 import { ValidationError, SchemaError } from '@plank-cms/schema'
 import { ZodError, flattenError } from 'zod'
 
+type PostgresError = {
+  code?: string
+  detail?: string
+}
+
+function parseUniqueViolationField(detail: string | undefined): string | null {
+  if (!detail) return null
+  const match = detail.match(/Key \(([^)]+)\)=\(([^)]*)\) already exists\./)
+  if (!match) return null
+  const field = match[1]?.trim()
+  if (!field || field.includes(',')) return null
+  return field
+}
+
 export function errorHandler(
   err: unknown,
   _req: Request,
@@ -20,6 +34,15 @@ export function errorHandler(
 
   if (err instanceof ZodError) {
     res.status(400).json({ errors: flattenError(err, (i) => i.message) })
+    return
+  }
+
+  const pgErr = err as PostgresError
+  if (pgErr?.code === '23505') {
+    const field = parseUniqueViolationField(pgErr.detail)
+    res
+      .status(409)
+      .json({ error: field ? `Field "${field}" already exists.` : 'Unique value already exists.' })
     return
   }
 
