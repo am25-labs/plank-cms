@@ -430,7 +430,10 @@ function StatusBadge({ entry, fields }: { entry: Entry; fields: FieldDef[] }) {
 
   const normalize = (v: unknown, type: string) => {
     if (type === 'datetime' && v && typeof v === 'string') {
-      const d = new Date(v)
+      // TIMESTAMP columns (no timezone) serialize to JSONB without TZ indicator;
+      // append 'Z' so parsing is stable (UTC) across views.
+      const s = /Z|[+-]\d{2}:\d{2}$/.test(v) ? v : v + 'Z'
+      const d = new Date(s)
       return isNaN(d.getTime()) ? v : d.toISOString()
     }
     return v
@@ -439,10 +442,13 @@ function StatusBadge({ entry, fields }: { entry: Entry; fields: FieldDef[] }) {
     entry.published_data != null &&
     fields.some(
       (f) =>
+        f.name in entry.published_data! &&
         JSON.stringify(normalize(entry[f.name], f.type)) !==
-        JSON.stringify(normalize(entry.published_data![f.name], f.type)),
+          JSON.stringify(normalize(entry.published_data![f.name], f.type)),
     )
-  return <Badge variant={isStale ? 'secondary' : 'default'}>Published</Badge>
+
+  if (isStale) return <Badge variant="secondary">Published*</Badge>
+  return <Badge variant="default">Published</Badge>
 }
 
 // ConfigureViewDialog
