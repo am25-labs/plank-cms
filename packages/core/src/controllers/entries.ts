@@ -656,6 +656,18 @@ export const patchEntryStatus: SlugIdParam = async (req, res) => {
       res.status(403).json({ error: 'In review status requires editorial mode' })
       return
     }
+    const { rows: currentRows } = await pool.query<{ status: string | null }>(
+      `SELECT status FROM ${quotedTableName} WHERE id = $1`,
+      [req.params.id],
+    )
+    if (!currentRows[0]) {
+      res.status(404).json({ error: 'Entry not found' })
+      return
+    }
+    if (currentRows[0].status !== 'pending' && currentRows[0].status !== 'in_review') {
+      res.status(400).json({ error: 'Only entries in review flow can be assigned to an Editor' })
+      return
+    }
     if (!isAdminRole && !isEditorRole) {
       res.status(403).json({ error: 'Forbidden' })
       return

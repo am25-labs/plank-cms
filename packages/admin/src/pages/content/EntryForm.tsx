@@ -92,6 +92,12 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(stableValue(value))
 }
 
+function parseDuplicatedFieldName(errorMessage: string): string | null {
+  const match = errorMessage.match(/Field "([^"]+)" already exists\.?/)
+  if (!match) return null
+  return match[1] ?? null
+}
+
 export function EntryForm() {
   const { slug, id } = useParams<{ slug: string; id: string }>()
   const navigate = useNavigate()
@@ -131,6 +137,7 @@ export function EntryForm() {
   const [assignedEditorLastName, setAssignedEditorLastName] = useState<string | null>(null)
   const [assignedEditorAvatarUrl, setAssignedEditorAvatarUrl] = useState<string | null>(null)
   const [reviewEditEnabled, setReviewEditEnabled] = useState(false)
+  const [uidErrorField, setUidErrorField] = useState<string | null>(null)
 
   // Scheduler panel state
   const [showScheduler, setShowScheduler] = useState(false)
@@ -163,6 +170,7 @@ export function EntryForm() {
       setAssignedEditorLastName(null)
       setAssignedEditorAvatarUrl(null)
       setReviewEditEnabled(false)
+      setUidErrorField(null)
       original.current = stableStringify(empty)
       return
     }
@@ -198,6 +206,7 @@ export function EntryForm() {
     setAssignedEditorLastName(existing._editor_last_name ?? null)
     setAssignedEditorAvatarUrl(existing._editor_avatar_url ?? null)
     setReviewEditEnabled(false)
+    setUidErrorField(null)
     original.current = stableStringify(initial)
 
     if (existing.scheduled_for) {
@@ -332,6 +341,7 @@ export function EntryForm() {
 
   async function saveFields(): Promise<Entry | null> {
     if (!slug || !ct) return null
+    setUidErrorField(null)
     const body: Record<string, unknown> = {}
     // When localization is enabled, prefer values from localized[defaultLocale]
     const localizedDefault: Record<string, unknown> | null =
@@ -376,7 +386,12 @@ export function EntryForm() {
       )
       original.current = stableStringify(values)
       return saved
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : ''
+      const duplicatedField = parseDuplicatedFieldName(message)
+      if (duplicatedField && ct.fields.some((f) => f.type === 'uid' && f.name === duplicatedField)) {
+        setUidErrorField(duplicatedField)
+      }
       return null
     }
   }
@@ -576,6 +591,7 @@ export function EntryForm() {
     status === 'scheduled' ||
     (!editorialMode && status === 'pending') ||
     (editorialMode && status === 'pending' && !isContributorRole) ||
+    (editorialMode && status === 'in_review' && !isContributorRole) ||
     isPublishedStale
   const canSchedule = !!(schedDate && schedTime)
   const publishLabel = editorialMode && isContributorRole ? 'Review' : 'Publish'
@@ -631,7 +647,11 @@ export function EntryForm() {
     if (isAdminOrSuper) return u.id === user?.id || (u.role_name ?? '').toLowerCase() === 'editor'
     return false
   })
-  const canManageReviewer = !isNew && editorialMode && (isEditorRole || isAdminOrSuper)
+  const canManageReviewer =
+    !isNew &&
+    editorialMode &&
+    (isEditorRole || isAdminOrSuper) &&
+    (status === 'pending' || status === 'in_review')
   const showReviewerControl = editorialMode && !isNew && canManageReviewer
   const showReviewerInfo = editorialMode && !isNew && Boolean(assignedEditorId)
   const showReviewEditButton = reviewerCanEnterEditMode
@@ -882,6 +902,9 @@ export function EntryForm() {
                     field={field}
                     value={renderValue}
                     onChange={(v) => {
+                      if (field.type === 'uid' && uidErrorField === field.name) {
+                        setUidErrorField(null)
+                      }
                       if (isLocalizable && localizationEnabled)
                         handleLocalizedChange(activeLocale, field.name, v)
                       else handleChange(field.name, v)
@@ -894,6 +917,11 @@ export function EntryForm() {
                       __defaultLocale: defaultLocale,
                     }}
                     disabled={Boolean(uidDisabled) || readOnly}
+                    errorMessage={
+                      field.type === 'uid' && uidErrorField === field.name
+                        ? `${field.name} already exists.`
+                        : undefined
+                    }
                   />
                 </div>
               </div>
