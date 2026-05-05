@@ -671,7 +671,7 @@ export function EntryForm() {
             <p className="text-muted-foreground text-xs mt-1">{ct.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            {!editorialMode && !isNew && canDeleteCurrentEntry && !isReadOnlySingle && (
+            {!isNew && canDeleteCurrentEntry && !isReadOnlySingle && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -682,13 +682,13 @@ export function EntryForm() {
                 <Trash2Icon className="size-4" />
               </Button>
             )}
-            {!editorialMode && !isNew && status === 'published' && !readOnly && (
+            {!isNew && status === 'published' && !readOnly && (
               <Button variant="outline" onClick={handleRevertToDraft} disabled={busy}>
                 {patching ? <Spinner className="size-4" /> : null}
                 Revert to draft
               </Button>
             )}
-            {!editorialMode && !isNew && status === 'scheduled' && !readOnly && (
+            {!isNew && status === 'scheduled' && !readOnly && (
               <Button variant="outline" onClick={handleRevertToDraft} disabled={busy}>
                 {patching ? <Spinner className="size-4" /> : null}
                 Cancel schedule
