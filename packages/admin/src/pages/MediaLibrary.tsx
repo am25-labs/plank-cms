@@ -694,24 +694,6 @@ export function MediaLibrary() {
       </HeaderFixed>
 
       <section className="mt-24">
-        {/* Search + count */}
-        <div className="mb-4 flex items-center gap-3">
-          <div className="relative max-w-72 w-full">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
-            <Input
-              className="pl-9"
-              placeholder="Search media…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          {!mediaLoading && mediaData != null && (
-            <span className="text-sm text-muted-foreground">
-              {mediaData.total} {mediaData.total === 1 ? 'file' : 'files'}
-            </span>
-          )}
-        </div>
-
         {/* Breadcrumb */}
         {breadcrumb.length > 1 && (
           <Breadcrumb className="mb-4">
@@ -738,42 +720,52 @@ export function MediaLibrary() {
           </Breadcrumb>
         )}
 
-        {/* Bulk bar */}
-        {!empty && !loading && (
-          <div className="mb-4 flex items-center gap-3 rounded-lg border border-border bg-muted/50 px-4 py-2.5">
-            <Checkbox
-              checked={allSelected ? true : someSelected ? 'indeterminate' : false}
-              onCheckedChange={() => {
-                if (allSelected) setSelected(new Set())
-                else setSelected(new Set(allKeys))
-              }}
-              aria-label="Select all"
+        {/* Toolbar */}
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-muted/50 p-2">
+          <div className="relative max-w-72 w-full">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-9 h-8 bg-background"
+              placeholder="Search media…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
+          </div>
+          {!mediaLoading && mediaData != null && (
+            <span className="text-sm text-muted-foreground">
+              {items.length} / {mediaData.total} {mediaData.total === 1 ? 'file' : 'files'}
+            </span>
+          )}
+          <div className="ml-auto flex h-8 items-center gap-2">
             {selected.size > 0 ? (
               <>
                 <span className="text-sm font-medium">{selected.size} selected</span>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}>
-                    Clear
+                <Button variant="outline" size="sm" onClick={() => setSelected(new Set())}>
+                  Clear
+                </Button>
+                {canDeleteMedia && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={bulkLoading}
+                    onClick={() => setBulkConfirmDelete(true)}
+                  >
+                    <Trash2Icon className="size-3.5" />
+                    Delete
                   </Button>
-                  {canDeleteMedia && (
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={bulkLoading}
-                      onClick={() => setBulkConfirmDelete(true)}
-                    >
-                      <Trash2Icon className="size-3.5" />
-                      Delete
-                    </Button>
-                  )}
-                </div>
+                )}
               </>
-            ) : (
-              <span className="text-sm text-muted-foreground">Select all</span>
-            )}
+            ) : !empty && !loading ? (
+              <button
+                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setSelected(new Set(allKeys))}
+              >
+                <Checkbox checked={false} aria-hidden className="pointer-events-none" />
+                Select all
+              </button>
+            ) : null}
           </div>
-        )}
+        </div>
 
         <input
           ref={inputRef}
