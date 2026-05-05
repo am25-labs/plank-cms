@@ -147,27 +147,39 @@ export const listEntries: SlugParam = async (req, res) => {
     ct.fields.some((f) => f.name === name && textLikeTypes.includes(f.type)),
   )
 
-  let mainWhereClause = ''
-  let countWhereClause = ''
   const mainParams: unknown[] = [limit, offset]
   const countParams: unknown[] = []
+  const mainClauses: string[] = []
+  const countClauses: string[] = []
+
+  const allowedStatuses = ['draft', 'published', 'scheduled', 'pending', 'in_review']
+  const statusFilter = req.query.status ? String(req.query.status) : ''
+  if (statusFilter && allowedStatuses.includes(statusFilter)) {
+    mainParams.push(statusFilter)
+    countParams.push(statusFilter)
+    mainClauses.push(`e.status = $${mainParams.length}`)
+    countClauses.push(`e.status = $${countParams.length}`)
+  }
 
   if (search && searchFields.length > 0) {
     const term = `%${search}%`
     mainParams.push(term)
     countParams.push(term)
-    const mainIdx = mainParams.length   // 3
-    const countIdx = countParams.length // 1
-    const mainConditions = searchFields.map((name) => {
+    const mainIdx = mainParams.length
+    const countIdx = countParams.length
+    const searchMainConditions = searchFields.map((name) => {
       assertSafeIdentifier(name)
       return `e.${quoteIdentifier(name)}::text ILIKE $${mainIdx}`
     })
-    const countConditions = searchFields.map((name) => {
+    const searchCountConditions = searchFields.map((name) => {
       return `e.${quoteIdentifier(name)}::text ILIKE $${countIdx}`
     })
-    mainWhereClause = `WHERE (${mainConditions.join(' OR ')})`
-    countWhereClause = `WHERE (${countConditions.join(' OR ')})`
+    mainClauses.push(`(${searchMainConditions.join(' OR ')})`)
+    countClauses.push(`(${searchCountConditions.join(' OR ')})`)
   }
+
+  const mainWhereClause = mainClauses.length > 0 ? `WHERE ${mainClauses.join(' AND ')}` : ''
+  const countWhereClause = countClauses.length > 0 ? `WHERE ${countClauses.join(' AND ')}` : ''
 
   const [{ rows }, { rows: countRows }] = await Promise.all([
     pool.query(

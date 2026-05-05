@@ -16,6 +16,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip.tsx'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card.tsx'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx'
 import { Label } from '@/components/ui/label.tsx'
 import {
@@ -46,13 +47,22 @@ type Entry = Record<string, unknown> & {
   id: string
   status: 'draft' | 'scheduled' | 'published'
   published_at: string | null
+  created_by: string | null
   _author_first_name: string | null
   _author_last_name: string | null
   _author_avatar_url: string | null
 }
-type EntriesResponse = { data: Entry[] }
+type EntriesResponse = { data: Entry[]; total: number }
 type RecentEntry = Entry & { slug: string; contentTypeName: string }
 type EntryFieldMap = Record<string, string>
+
+type DashboardStats = {
+  totalEntries: number
+  totalDrafts: number
+  myDrafts: number
+  totalScheduled: number
+  myScheduled: number
+}
 
 const RECENT_ENTRY_FIELD_PREFS_KEY = 'plank_dashboard_recent_entry_fields'
 
@@ -65,6 +75,8 @@ export function Dashboard() {
   const [loadingRecent, setLoadingRecent] = useState(false)
   const [configureOpen, setConfigureOpen] = useState(false)
   const [entryFieldMap, setEntryFieldMap] = useState<EntryFieldMap>({})
+
+  const [stats, setStats] = useState<DashboardStats | null>(null)
 
   const permissions = user?.permissions ?? []
   const canWriteEntries = permissions.includes('*') || permissions.includes('entries:write')
@@ -120,6 +132,63 @@ export function Dashboard() {
   useEffect(() => {
     localStorage.setItem(RECENT_ENTRY_FIELD_PREFS_KEY, JSON.stringify(entryFieldMap))
   }, [entryFieldMap])
+
+  useEffect(() => {
+    if (!canReadEntries || collectionTypes.length === 0) return
+
+    const controller = new AbortController()
+    const token = localStorage.getItem('plank_token')
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    }
+
+    async function fetchCount(slug: string, status?: string): Promise<{ total: number; data: Entry[] }> {
+      const params = new URLSearchParams({ page: '1', limit: '100' })
+      if (status) params.set('status', status)
+      const res = await fetch(`/cms/admin/content-types/${slug}/entries?${params}`, {
+        headers,
+        signal: controller.signal,
+      })
+      if (!res.ok) return { total: 0, data: [] }
+      const json = (await res.json()) as EntriesResponse
+      return { total: json.total ?? 0, data: json.data ?? [] }
+    }
+
+    Promise.all(
+      collectionTypes.map(async (ct) => {
+        const [allRes, draftsRes, scheduledRes] = await Promise.all([
+          fetchCount(ct.slug),
+          fetchCount(ct.slug, 'draft'),
+          fetchCount(ct.slug, 'scheduled'),
+        ])
+        return { allRes, draftsRes, scheduledRes }
+      }),
+    )
+      .then((results) => {
+        const userId = user?.id
+        let totalEntries = 0
+        let totalDrafts = 0
+        let myDrafts = 0
+        let totalScheduled = 0
+        let myScheduled = 0
+
+        for (const { allRes, draftsRes, scheduledRes } of results) {
+          totalEntries += allRes.total
+          totalDrafts += draftsRes.total
+          totalScheduled += scheduledRes.total
+          if (userId) {
+            myDrafts += draftsRes.data.filter((e) => e.created_by === userId).length
+            myScheduled += scheduledRes.data.filter((e) => e.created_by === userId).length
+          }
+        }
+
+        setStats({ totalEntries, totalDrafts, myDrafts, totalScheduled, myScheduled })
+      })
+      .catch(() => {})
+
+    return () => controller.abort()
+  }, [canReadEntries, collectionTypes, user?.id])
 
   function handleNewEntry() {
     if (!contentTypes || contentTypes.length === 0) return
@@ -215,7 +284,46 @@ export function Dashboard() {
         </div>
       </HeaderFixed>
 
-      <section className="mt-24">
+      <section className="mt-24 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[
+          {
+            label: 'Entries',
+            value: stats?.totalEntries ?? '—',
+            context: contentTypes
+              ? `${contentTypes.filter((ct) => ct.kind === 'collection').length} Content Types`
+              : '—',
+          },
+          {
+            label: 'Content Types',
+            value: contentTypes?.length ?? '—',
+            context: contentTypes
+              ? `${contentTypes.filter((ct) => ct.kind === 'collection').length} Collection · ${contentTypes.filter((ct) => ct.kind === 'single').length} Single`
+              : '—',
+          },
+          {
+            label: 'Drafts',
+            value: stats?.totalDrafts ?? '—',
+            context: stats ? `${stats.myDrafts} owned by you` : '—',
+          },
+          {
+            label: 'Scheduled',
+            value: stats?.totalScheduled ?? '—',
+            context: stats ? `${stats.myScheduled} owned by you` : '—',
+          },
+        ].map(({ label, value, context }) => (
+          <Card key={label}>
+            <CardHeader>
+              <CardTitle className="text-base font-bold uppercase">{label}</CardTitle>
+              <div className="text-3xl font-bold">{value}</div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-muted-foreground">{context}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+
+      <section className="mt-4">
         <TooltipProvider>
           <div className="overflow-hidden rounded-lg border border-border bg-background">
             <Table className="w-full text-sm">
