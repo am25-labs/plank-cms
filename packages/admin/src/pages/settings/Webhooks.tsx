@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, Trash2Icon } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner.tsx'
@@ -132,8 +133,9 @@ export function SettingsWebhooks() {
       setCreateOpen(false)
       setForm(EMPTY_FORM)
       refetch()
+      toast.success('Webhook saved')
     } catch {
-      /* shown via apiError */
+      toast.error('Could not save webhook')
     }
   }
 
@@ -142,8 +144,9 @@ export function SettingsWebhooks() {
       await request(`/cms/admin/webhooks/${deleteWebhook!.id}`, 'DELETE')
       setDeleteWebhook(null)
       refetch()
+      toast.success('Webhook deleted')
     } catch {
-      /* shown via apiError */
+      toast.error('Could not delete webhook')
     }
   }
 

@@ -3,13 +3,13 @@ import { createRoot } from 'react-dom/client'
 import { ThemeProvider } from 'next-themes'
 import './styles/globals.css'
 import App from './App.tsx'
-import { Toaster } from '@/components/ui/sonner.tsx'
+import { ToasterWrap } from '@/components/ui/custom/ToasterWrap'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <App />
-      <Toaster />
+      <ToasterWrap />
     </ThemeProvider>
   </StrictMode>
 )

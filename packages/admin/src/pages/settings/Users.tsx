@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { toast } from 'sonner'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 import { useAuth } from '@/context/auth.tsx'
@@ -184,8 +185,9 @@ export function SettingsUsers() {
               try {
                 await request(`/cms/admin/users/${row.original.id}`, 'PUT', { enabled: checked })
                 refetch()
+                toast.success('User updated')
               } catch {
-                /* surfaced by apiError */
+                toast.error('Could not update user')
               }
             }}
             disabled={row.original.id === currentUser?.id || submitting}
@@ -235,8 +237,9 @@ export function SettingsUsers() {
       setCreateOpen(false)
       setCreateForm(EMPTY_CREATE)
       refetch()
+      toast.success('User created')
     } catch {
-      /* error shown via apiError */
+      toast.error('Could not create user')
     }
   }
 
@@ -253,8 +256,9 @@ export function SettingsUsers() {
       }
       setEditUser(null)
       refetch()
+      toast.success('User updated')
     } catch {
-      /* error shown via apiError */
+      toast.error('Could not update user')
     }
   }
 
@@ -263,8 +267,9 @@ export function SettingsUsers() {
       await request(`/cms/admin/users/${deleteUser!.id}`, 'DELETE')
       setDeleteUser(null)
       refetch()
+      toast.success('User deleted')
     } catch {
-      /* error shown via apiError */
+      toast.error('Could not delete user')
     }
   }
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
   DndContext,
@@ -472,6 +473,7 @@ function MediaInput({
       onChange(data.id)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.')
+      toast.error('Upload failed')
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -725,6 +727,7 @@ function MediaGalleryInput({
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed.')
+      toast.error('Upload failed')
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''

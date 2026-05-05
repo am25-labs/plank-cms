@@ -16,6 +16,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { toast } from 'sonner'
 import { useApi } from '@/hooks/useApi.ts'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useAuth } from '@/context/auth.tsx'
@@ -255,12 +256,13 @@ export function ContentTypeForm() {
         fields: JSON.stringify(saved.fields),
       }
       window.dispatchEvent(new CustomEvent('plank:content-types-changed'))
+      toast.success('Content type saved')
       if (isNew || saved.slug !== routeSlug) {
         skipBlocker.current = true
         navigate(`/content-types/${saved.slug}`, { replace: true })
       }
     } catch {
-      // error surfaced by useApi
+      toast.error('Could not save content type')
     }
   }
 
@@ -268,10 +270,11 @@ export function ContentTypeForm() {
     if (!canDeleteContentTypes) return
     try {
       await requestDelete(`/cms/admin/content-types/${routeSlug}`, 'DELETE')
+      toast.success('Content type deleted')
       window.dispatchEvent(new CustomEvent('plank:content-types-changed'))
       navigate('/content-types', { replace: true })
     } catch {
-      // error surfaced by useApi
+      toast.error('Could not delete content type')
     }
   }
 

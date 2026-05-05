@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
 import { RotateCcwIcon, SaveIcon } from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
@@ -92,21 +93,31 @@ export function SettingsRoles() {
   }
 
   async function save(role: Role) {
-    await request(`/cms/admin/roles/${role.id}`, 'PUT', {
-      permissions: Array.from(perms[role.id] ?? []),
-    })
-    setDirty((prev) => {
-      const next = new Set(prev)
-      next.delete(role.id)
-      return next
-    })
+    try {
+      await request(`/cms/admin/roles/${role.id}`, 'PUT', {
+        permissions: Array.from(perms[role.id] ?? []),
+      })
+      setDirty((prev) => {
+        const next = new Set(prev)
+        next.delete(role.id)
+        return next
+      })
+      toast.success('Permissions saved')
+    } catch {
+      toast.error('Could not save permissions')
+    }
   }
 
   async function handleReset() {
-    await request('/cms/admin/roles/reset', 'POST')
-    setResetOpen(false)
-    setDirty(new Set())
-    refetch()
+    try {
+      await request('/cms/admin/roles/reset', 'POST')
+      setResetOpen(false)
+      setDirty(new Set())
+      refetch()
+      toast.success('Permissions reset to defaults')
+    } catch {
+      toast.error('Could not reset permissions')
+    }
   }
 
   const isSuperAdmin = user?.role === 'Super Admin'

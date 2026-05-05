@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useApi } from '@/hooks/useApi.ts'
 import { useAuth } from '@/context/auth.tsx'
 import { Button } from '@/components/ui/button.tsx'
@@ -72,8 +73,9 @@ export function SecurityCard() {
     try {
       await request('/cms/admin/users/me/password', 'PATCH', { currentPassword, newPassword })
       handleClose()
+      toast.success('Password updated')
     } catch {
-      /* error shown via pwError */
+      toast.error('Could not update password')
     }
   }
 
@@ -83,26 +85,36 @@ export function SecurityCard() {
   }
 
   async function handleEnable2FA() {
-    const data = await request2FA('/cms/admin/users/me/2fa/verify', 'POST', { code: otpCode }) as VerifyTwoFactorResponse
-    setTwoFactorEnabled(true)
-    updateUser({ twoFactorEnabled: true })
-    setSetupData(null)
-    setOtpCode('')
-    setJustEnabled2FA(true)
-    setBackupCodes(data.backupCodes ?? [])
+    try {
+      const data = await request2FA('/cms/admin/users/me/2fa/verify', 'POST', { code: otpCode }) as VerifyTwoFactorResponse
+      setTwoFactorEnabled(true)
+      updateUser({ twoFactorEnabled: true })
+      setSetupData(null)
+      setOtpCode('')
+      setJustEnabled2FA(true)
+      setBackupCodes(data.backupCodes ?? [])
+      toast.success('Two-factor authentication enabled')
+    } catch {
+      toast.error('Could not enable 2FA')
+    }
   }
 
   async function handleDisable2FA() {
-    await request2FA('/cms/admin/users/me/2fa/disable', 'POST', {
-      code: otpCode,
-      password: disablePassword,
-    })
-    setTwoFactorEnabled(false)
-    updateUser({ twoFactorEnabled: false })
-    setOtpCode('')
-    setDisablePassword('')
-    setBackupCodes([])
-    setCopiedBackupCodes(false)
+    try {
+      await request2FA('/cms/admin/users/me/2fa/disable', 'POST', {
+        code: otpCode,
+        password: disablePassword,
+      })
+      setTwoFactorEnabled(false)
+      updateUser({ twoFactorEnabled: false })
+      setOtpCode('')
+      setDisablePassword('')
+      setBackupCodes([])
+      setCopiedBackupCodes(false)
+      toast.success('Two-factor authentication disabled')
+    } catch {
+      toast.error('Could not disable 2FA')
+    }
   }
 
   return (

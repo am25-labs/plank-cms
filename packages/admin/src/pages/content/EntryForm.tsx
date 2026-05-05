@@ -9,6 +9,7 @@ import {
   XIcon,
   SaveIcon,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { useKeyboardShortcut } from '@/hooks/useKeyboardShortcut.ts'
@@ -392,6 +393,7 @@ export function EntryForm() {
       if (duplicatedField && ct.fields.some((f) => f.type === 'uid' && f.name === duplicatedField)) {
         setUidErrorField(duplicatedField)
       }
+      toast.error('Could not save draft')
       return null
     }
   }
@@ -410,11 +412,13 @@ export function EntryForm() {
         setScheduledFor('')
         setShowScheduler(false)
       } catch {
-        // surfaced by useApi
+        toast.error('Could not save draft')
       }
     } else if (status === 'published') {
       setIsPublishedStale(true)
     }
+
+    toast.success('Draft saved')
 
     if (isNew) {
       skipBlocker.current = true
@@ -458,8 +462,10 @@ export function EntryForm() {
       setIsPublishedStale(false)
       setShowScheduler(false)
       setReviewEditEnabled(false)
+      toast.success('Entry published')
       if (isNew) navigate(`/content/${slug}/${entryId}`, { replace: true })
     } catch {
+      toast.error('Could not publish entry')
       if (isNew && entryId) navigate(`/content/${slug}/${entryId}`, { replace: true })
     }
   }
@@ -486,8 +492,10 @@ export function EntryForm() {
       setStatus('scheduled')
       setScheduledFor(newScheduledFor)
       setShowScheduler(false)
+      toast.success('Entry scheduled')
       if (isNew) navigate(`/content/${slug}/${entryId}`, { replace: true })
     } catch {
+      toast.error('Could not schedule entry')
       if (isNew && entryId) navigate(`/content/${slug}/${entryId}`, { replace: true })
     }
   }
@@ -499,8 +507,9 @@ export function EntryForm() {
       setStatus('draft')
       setScheduledFor('')
       setIsPublishedStale(false)
+      toast.success('Reverted to draft')
     } catch {
-      // surfaced by useApi
+      toast.error('Could not revert entry')
     }
   }
 
@@ -508,28 +517,34 @@ export function EntryForm() {
     if (!slug || !id) return
     try {
       await requestDelete(`/cms/admin/entries/${slug}/${id}`, 'DELETE')
+      toast.success('Entry deleted')
       skipBlocker.current = true
       navigate(`/content/${slug}`, { replace: true })
     } catch {
-      // surfaced by useApi
+      toast.error('Could not delete entry')
     }
   }
 
   async function handleAssignEditor(editorId: string) {
     if (!slug || !id) return
     const nextId = editorId === 'none' ? null : editorId
-    const patched = await requestStatus(`/cms/admin/entries/${slug}/${id}/status`, 'PATCH', {
-      status: 'in_review',
-      editor_id: nextId,
-      review_locked_by_editor: existing?.review_locked_by_editor ?? false,
-    })
-    setStatus((patched?.status as Entry['status']) ?? 'in_review')
-    setReviewRejected(Boolean(patched?.review_rejected))
-    setAssignedEditorId((patched?.editor_id as string | null | undefined) ?? nextId)
-    setAssignedEditorFirstName((patched?._editor_first_name as string | null | undefined) ?? null)
-    setAssignedEditorLastName((patched?._editor_last_name as string | null | undefined) ?? null)
-    setAssignedEditorAvatarUrl((patched?._editor_avatar_url as string | null | undefined) ?? null)
-    setReviewEditEnabled(false)
+    try {
+      const patched = await requestStatus(`/cms/admin/entries/${slug}/${id}/status`, 'PATCH', {
+        status: 'in_review',
+        editor_id: nextId,
+        review_locked_by_editor: existing?.review_locked_by_editor ?? false,
+      })
+      setStatus((patched?.status as Entry['status']) ?? 'in_review')
+      setReviewRejected(Boolean(patched?.review_rejected))
+      setAssignedEditorId((patched?.editor_id as string | null | undefined) ?? nextId)
+      setAssignedEditorFirstName((patched?._editor_first_name as string | null | undefined) ?? null)
+      setAssignedEditorLastName((patched?._editor_last_name as string | null | undefined) ?? null)
+      setAssignedEditorAvatarUrl((patched?._editor_avatar_url as string | null | undefined) ?? null)
+      setReviewEditEnabled(false)
+      toast.success('Editor assigned')
+    } catch {
+      toast.error('Could not assign editor')
+    }
   }
 
   async function handleToggleReviewLock() {
@@ -538,13 +553,18 @@ export function EntryForm() {
 
   async function handleReject() {
     if (!slug || !id) return
-    const patched = await requestStatus(`/cms/admin/entries/${slug}/${id}/status`, 'PATCH', {
-      status: 'pending',
-      review_rejected: true,
-    })
-    setStatus((patched?.status as Entry['status']) ?? 'pending')
-    setReviewRejected(Boolean(patched?.review_rejected))
-    setReviewEditEnabled(false)
+    try {
+      const patched = await requestStatus(`/cms/admin/entries/${slug}/${id}/status`, 'PATCH', {
+        status: 'pending',
+        review_rejected: true,
+      })
+      setStatus((patched?.status as Entry['status']) ?? 'pending')
+      setReviewRejected(Boolean(patched?.review_rejected))
+      setReviewEditEnabled(false)
+      toast.success('Entry rejected')
+    } catch {
+      toast.error('Could not reject entry')
+    }
   }
 
   const loading = loadingCt || (!isNew && loadingEntry)

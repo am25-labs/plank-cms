@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import { useAuth } from '@/context/auth.tsx'
 import { useApi } from '@/hooks/useApi.ts'
 import { Button } from '@/components/ui/button.tsx'
@@ -49,8 +50,10 @@ export function AccountCard() {
     try {
       const avatarUrl = await uploadAvatarFile(file)
       updateUser({ avatarUrl })
+      toast.success('Avatar updated')
     } catch (err) {
       setAvatarError(err instanceof Error ? err.message : 'Upload failed.')
+      toast.error('Could not update avatar')
     } finally {
       setUploadingAvatar(false)
       if (avatarInputRef.current) avatarInputRef.current.value = ''
@@ -63,8 +66,10 @@ export function AccountCard() {
     try {
       await requestDeleteAvatar('/cms/admin/users/me/avatar', 'DELETE')
       updateUser({ avatarUrl: null })
+      toast.success('Avatar removed')
     } catch (err) {
       setAvatarError(err instanceof Error ? err.message : 'Delete failed.')
+      toast.error('Could not remove avatar')
     } finally {
       setDeletingAvatar(false)
     }
@@ -82,8 +87,9 @@ export function AccountCard() {
         country: updated.country,
       })
       setEditing(false)
+      toast.success('Profile saved')
     } catch {
-      /* error shown via saveError */
+      toast.error('Could not save profile')
     }
   }
 

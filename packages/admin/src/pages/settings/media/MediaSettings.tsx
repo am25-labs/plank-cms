@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
@@ -311,8 +312,9 @@ export function MediaSettings() {
       await request('/cms/admin/settings/media', 'PUT', values)
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
+      toast.success('Media settings saved')
     } catch {
-      /* error shown via error state */
+      toast.error('Could not save media settings')
     }
   }
 

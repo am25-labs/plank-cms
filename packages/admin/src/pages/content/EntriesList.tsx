@@ -17,6 +17,7 @@ import {
   CalendarClockIcon,
   SearchIcon,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
 import { useSettings } from '@/context/settings.tsx'
@@ -875,7 +876,12 @@ export function EntriesList() {
 
   async function handleDelete() {
     if (!deletingId || !slug) return
-    await requestDelete(`/cms/admin/entries/${slug}/${deletingId}`, 'DELETE')
+    try {
+      await requestDelete(`/cms/admin/entries/${slug}/${deletingId}`, 'DELETE')
+      toast.success('Entry deleted')
+    } catch {
+      toast.error('Could not delete entry')
+    }
     setDeletingId(null)
     refetch()
   }
@@ -941,8 +947,11 @@ export function EntriesList() {
           }),
         ),
       )
+      toast.success('Entries unpublished')
       setSelected(new Set())
       refetch()
+    } catch {
+      toast.error('Could not unpublish entries')
     } finally {
       setBulkLoading(false)
     }
@@ -959,9 +968,12 @@ export function EntriesList() {
           fetch(`/cms/admin/entries/${slug}/${id}`, { method: 'DELETE', headers }),
         ),
       )
+      toast.success('Entries deleted')
       setBulkConfirmDelete(false)
       setSelected(new Set())
       refetch()
+    } catch {
+      toast.error('Could not delete entries')
     } finally {
       setBulkLoading(false)
     }

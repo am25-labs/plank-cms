@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
 import { PlusIcon, Trash2Icon, CopyIcon, CheckIcon } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner.tsx'
@@ -136,8 +137,9 @@ export function SettingsApiTokens() {
       })
       setCreated(result)
       refetch()
+      toast.success('API token created')
     } catch {
-      /* shown via apiError */
+      toast.error('Could not create token')
     }
   }
 
@@ -152,8 +154,9 @@ export function SettingsApiTokens() {
       await request(`/cms/admin/api-tokens/${deleteToken!.id}`, 'DELETE')
       setDeleteToken(null)
       refetch()
+      toast.success('Token revoked')
     } catch {
-      /* shown via apiError */
+      toast.error('Could not revoke token')
     }
   }
 

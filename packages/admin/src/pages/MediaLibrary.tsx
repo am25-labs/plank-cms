@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react'
+import { toast } from 'sonner'
 import {
   UploadIcon,
   FileIcon,
@@ -498,8 +499,10 @@ export function MediaLibrary() {
       }))
       await uploadFilesWithPaths(filesWithPaths)
       refetch()
+      toast.success('Upload complete')
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed.')
+      toast.error('Upload failed')
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -526,8 +529,10 @@ export function MediaLibrary() {
       const nested = await Promise.all(entries.map(readFSEntry))
       await uploadFilesWithPaths(nested.flat())
       refetch()
+      toast.success('Upload complete')
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed.')
+      toast.error('Upload failed')
     } finally {
       setUploading(false)
     }
@@ -558,8 +563,9 @@ export function MediaLibrary() {
       setNewFolderOpen(false)
       setNewFolderName('')
       refetchFolders()
+      toast.success('Folder created')
     } catch {
-      /* shown via folderSaveError */
+      toast.error('Could not create folder')
     }
   }
 
@@ -572,8 +578,9 @@ export function MediaLibrary() {
       })
       setFolderToRename(null)
       refetchFolders()
+      toast.success('Folder renamed')
     } catch {
-      /* shown via folderSaveError */
+      toast.error('Could not rename folder')
     }
   }
 
@@ -584,8 +591,9 @@ export function MediaLibrary() {
       await request(`/cms/admin/folders/${folderToDelete.id}`, 'DELETE')
       setFolderToDelete(null)
       refetchFolders()
+      toast.success('Folder deleted')
     } catch {
-      /* shown via deleteError */
+      toast.error('Could not delete folder')
     }
   }
 
@@ -598,8 +606,9 @@ export function MediaLibrary() {
       await request(`/cms/admin/media/${toDelete.id}`, 'DELETE')
       setToDelete(null)
       refetchMedia()
+      toast.success('File deleted')
     } catch {
-      /* shown via deleteError */
+      toast.error('Could not delete file')
     }
   }
 
@@ -652,9 +661,12 @@ export function MediaLibrary() {
           .filter((k) => !k.startsWith('folder:'))
           .map((k) => fetch(`/cms/admin/media/${k}`, { method: 'DELETE', headers })),
       ])
+      toast.success('Files deleted')
       setBulkConfirmDelete(false)
       setSelected(new Set())
       refetch()
+    } catch {
+      toast.error('Could not delete files')
     } finally {
       setBulkLoading(false)
     }
@@ -906,8 +918,10 @@ export function MediaLibrary() {
                     const updated = (await res.json()) as MediaItem
                     openPreview(updated)
                     refetchMedia()
+                    toast.success('File updated')
                   } catch (err) {
                     setEditError(err instanceof Error ? err.message : 'Save failed.')
+                    toast.error('Could not update file')
                   } finally {
                     setEditSaving(false)
                   }

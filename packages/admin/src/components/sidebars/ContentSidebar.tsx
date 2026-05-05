@@ -1,3 +1,4 @@
+import { toast } from 'sonner'
 import { StarIcon } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useFetch } from '@/hooks/useFetch.ts'
@@ -23,8 +24,13 @@ export function ContentSidebar() {
   async function handleSetDefault(e: React.MouseEvent, slug: string) {
     e.preventDefault()
     e.stopPropagation()
-    await request(`/cms/admin/content-types/${slug}/default`, 'PUT')
-    refetch()
+    try {
+      await request(`/cms/admin/content-types/${slug}/default`, 'PUT')
+      refetch()
+      toast.success('Default content type updated')
+    } catch {
+      toast.error('Could not update default')
+    }
   }
 
   function isActive(slug: string) {
