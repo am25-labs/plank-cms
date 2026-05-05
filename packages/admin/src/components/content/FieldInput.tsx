@@ -53,6 +53,7 @@ import {
   PlusIcon,
   Trash2Icon,
   ChevronUpIcon,
+  SearchIcon,
 } from 'lucide-react'
 
 type FieldType =
@@ -180,6 +181,8 @@ function matchesAllowedTypes(
   })
 }
 
+const PICKER_LIMIT = 30
+
 function MediaPickerDialog({
   open,
   onOpenChange,
@@ -196,7 +199,25 @@ function MediaPickerDialog({
 
   const [folders, setFolders] = useState<PickerFolder[]>([])
   const [items, setItems] = useState<MediaItem[]>([])
+  const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [page, setPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setPage(1)
+    setSearchQuery('')
+    setDebouncedSearch('')
+  }, [currentFolderId])
 
   useEffect(() => {
     if (!open) return
@@ -204,28 +225,44 @@ function MediaPickerDialog({
     const token = localStorage.getItem('plank_token')
     const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
     const folderParam = currentFolderId ?? ''
+    const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''
     Promise.all([
-      fetch(`/cms/admin/folders?parent_id=${folderParam}`, { headers })
-        .then((r) => (r.ok ? (r.json() as Promise<{ folders: PickerFolder[] }>) : { folders: [] }))
-        .then((d) => d.folders),
-      fetch(`/cms/admin/media?folder_id=${folderParam}`, { headers })
-        .then((r) => (r.ok ? (r.json() as Promise<{ items: MediaItem[] }>) : { items: [] }))
-        .then((d) => d.items),
+      debouncedSearch
+        ? Promise.resolve([] as PickerFolder[])
+        : fetch(`/cms/admin/folders?parent_id=${folderParam}`, { headers })
+            .then((r) => (r.ok ? (r.json() as Promise<{ folders: PickerFolder[] }>) : { folders: [] }))
+            .then((d) => d.folders),
+      fetch(
+        `/cms/admin/media?folder_id=${folderParam}&page=${page}&limit=${PICKER_LIMIT}${searchParam}`,
+        { headers },
+      )
+        .then((r) =>
+          r.ok
+            ? (r.json() as Promise<{ items: MediaItem[]; pages: number }>)
+            : { items: [], pages: 1 },
+        ),
     ])
-      .then(([f, m]) => {
+      .then(([f, mediaData]) => {
         setFolders(f)
-        setItems(m)
+        setItems(mediaData.items)
+        setTotalPages(mediaData.pages ?? 1)
       })
       .catch(() => {
         setFolders([])
         setItems([])
+        setTotalPages(1)
       })
       .finally(() => setLoading(false))
-  }, [open, currentFolderId])
+  }, [open, currentFolderId, page, debouncedSearch])
 
   // Reset to root when dialog closes
   useEffect(() => {
-    if (!open) setBreadcrumb([{ id: null, name: 'Media' }])
+    if (!open) {
+      setBreadcrumb([{ id: null, name: 'Media' }])
+      setPage(1)
+      setSearchQuery('')
+      setDebouncedSearch('')
+    }
   }, [open])
 
   function openFolder(folder: PickerFolder) {
@@ -241,14 +278,25 @@ function MediaPickerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Media Library</DialogTitle>
         </DialogHeader>
 
+        {/* Search */}
+        <div className="relative shrink-0">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+          <Input
+            className="pl-9 h-8"
+            placeholder="Search media…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
         {/* Breadcrumb */}
-        {breadcrumb.length > 1 && (
-          <div className="flex items-center gap-1 text-sm -mt-1">
+        {!debouncedSearch && breadcrumb.length > 1 && (
+          <div className="flex items-center gap-1 text-sm shrink-0">
             {breadcrumb.map((entry, i) => (
               <span key={i} className="flex items-center gap-1 text-muted-foreground">
                 {i > 0 && <span>/</span>}
@@ -270,17 +318,19 @@ function MediaPickerDialog({
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex flex-1 items-center justify-center py-16">
             <Spinner className="size-5" />
           </div>
         ) : empty ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">
-            {items.length === 0 && folders.length === 0
-              ? 'No media found.'
-              : 'No matching files in this folder.'}
+          <p className="flex-1 py-16 text-center text-sm text-muted-foreground">
+            {debouncedSearch
+              ? 'No matching files.'
+              : items.length === 0 && folders.length === 0
+                ? 'No media found.'
+                : 'No matching files in this folder.'}
           </p>
         ) : (
-          <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-4 flex-1 min-h-0 overflow-y-auto pr-1">
             {folders.length > 0 && (
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                 {folders.map((folder) => (
@@ -342,6 +392,31 @@ function MediaPickerDialog({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-end gap-3 pt-2 border-t shrink-0">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-muted-foreground">
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            >
+              Next
+            </button>
           </div>
         )}
       </DialogContent>
