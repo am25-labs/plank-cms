@@ -24,6 +24,10 @@ type Row = Record<string, unknown> & {
   _editor_country?: string | null
 }
 type LocalizedValues = Record<string, Record<string, unknown>>
+type FieldSelection = {
+  include: Set<string> | null
+  exclude: Set<string>
+}
 
 type MediaValue = {
   id: string | null
@@ -52,6 +56,76 @@ function createMediaValue(
     width: options?.width ?? null,
     height: options?.height ?? null,
   }
+}
+
+const SYSTEM_RESPONSE_FIELDS = [
+  'id',
+  'status',
+  'published_at',
+  'created_at',
+  'updated_at',
+  'author',
+  'editor',
+] as const
+
+function parseCsvParam(value: unknown): string[] {
+  if (typeof value !== 'string') return []
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+function parseFieldSelection(
+  query: Record<string, unknown>,
+  ct: ContentType,
+): { selection: FieldSelection; invalidFields: string[] } {
+  const includeFields = [...parseCsvParam(query.fields), ...parseCsvParam(query.select)]
+  const excludeFields = parseCsvParam(query.exclude)
+  const allowedFields = new Set<string>([
+    ...ct.fields.map((field) => field.name),
+    ...SYSTEM_RESPONSE_FIELDS,
+  ])
+  const invalidFields = [...includeFields, ...excludeFields].filter(
+    (field) => !allowedFields.has(field),
+  )
+
+  return {
+    selection: {
+      include: includeFields.length > 0 ? new Set(includeFields) : null,
+      exclude: new Set(excludeFields),
+    },
+    invalidFields,
+  }
+}
+
+function selectEntryFields(
+  entry: Record<string, unknown>,
+  ct: ContentType,
+  selection: FieldSelection,
+): Record<string, unknown> {
+  if (selection.include === null && selection.exclude.size === 0) return entry
+
+  const out: Record<string, unknown> = {}
+  const orderedKeys = [
+    'id',
+    ...ct.fields.map((field) => field.name),
+    'status',
+    'published_at',
+    'created_at',
+    'updated_at',
+    'author',
+    'editor',
+  ]
+
+  for (const key of orderedKeys) {
+    if (!(key in entry)) continue
+    if (selection.include && !selection.include.has(key)) continue
+    if (selection.exclude.has(key)) continue
+    out[key] = entry[key]
+  }
+
+  return out
 }
 
 function normalizeNavigationItems(value: unknown): unknown {
@@ -384,6 +458,15 @@ export const listPublicEntries: SlugParam = async (req, res) => {
     return
   }
 
+  const { selection, invalidFields } = parseFieldSelection(
+    req.query as Record<string, unknown>,
+    ct,
+  )
+  if (invalidFields.length > 0) {
+    res.status(400).json({ error: `Unknown fields: ${invalidFields.join(', ')}` })
+    return
+  }
+
   assertSafeIdentifier(ct.tableName)
 
   if (ct.kind === 'single') {
@@ -412,7 +495,7 @@ export const listPublicEntries: SlugParam = async (req, res) => {
       resolveAuthorAvatars([entry]),
       resolveRelationFields([entry], ct),
     ])
-    res.json(entry)
+    res.json(selectEntryFields(entry, ct, selection))
     return
   }
 
@@ -442,7 +525,18 @@ export const listPublicEntries: SlugParam = async (req, res) => {
   const sortDir = String(req.query.order ?? 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC'
 
   for (const [key, value] of Object.entries(req.query)) {
-    if (key === 'page' || key === 'limit' || key === 'status' || key === 'sort' || key === 'order')
+    if (
+      key === 'page' ||
+      key === 'limit' ||
+      key === 'status' ||
+      key === 'sort' ||
+      key === 'order' ||
+      key === 'locale' ||
+      key === 'fallback' ||
+      key === 'fields' ||
+      key === 'select' ||
+      key === 'exclude'
+    )
       continue
     if (knownFields.has(key)) {
       assertSafeIdentifier(key)
@@ -474,13 +568,27 @@ export const listPublicEntries: SlugParam = async (req, res) => {
     resolveAuthorAvatars(data),
     resolveRelationFields(data, ct),
   ])
-  res.json({ data, total: parseInt(countRows[0].count), page, limit })
+  res.json({
+    data: data.map((entry) => selectEntryFields(entry, ct, selection)),
+    total: parseInt(countRows[0].count),
+    page,
+    limit,
+  })
 }
 
 export const getPublicEntry: SlugIdParam = async (req, res) => {
   const ct = await findContentTypeBySlug(req.params.slug)
   if (!ct) {
     res.status(404).json({ error: 'Not found' })
+    return
+  }
+
+  const { selection, invalidFields } = parseFieldSelection(
+    req.query as Record<string, unknown>,
+    ct,
+  )
+  if (invalidFields.length > 0) {
+    res.status(400).json({ error: `Unknown fields: ${invalidFields.join(', ')}` })
     return
   }
 
@@ -512,5 +620,5 @@ export const getPublicEntry: SlugIdParam = async (req, res) => {
     resolveAuthorAvatars([entry]),
     resolveRelationFields([entry], ct),
   ])
-  res.json(entry)
+  res.json(selectEntryFields(entry, ct, selection))
 }
