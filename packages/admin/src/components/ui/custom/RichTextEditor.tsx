@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useEditor, EditorContent } from '@tiptap/react'
+import {
+  useEditor,
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  type NodeViewProps,
+} from '@tiptap/react'
 import { StarterKit } from '@tiptap/starter-kit'
 import { Image } from '@tiptap/extension-image'
 import {
@@ -19,11 +25,13 @@ import {
   Unlink2Icon,
   WrapTextIcon,
   ImageIcon,
+  Trash2Icon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils.ts'
 
 export type ImageInsert = {
   src: string
+  filename?: string | null
   alt?: string | null
   title?: string | null
   width?: number | null
@@ -72,6 +80,74 @@ function ToolbarDivider() {
   return <div className="mx-0.5 h-4 w-px bg-border" />
 }
 
+function formatImageDimensions(width?: number | null, height?: number | null): string | null {
+  if (!width || !height) return null
+  return `${width} × ${height}`
+}
+
+function getImageFilename(src: string): string {
+  try {
+    const url = new URL(src)
+    const segments = url.pathname.split('/').filter(Boolean)
+    return segments[segments.length - 1] || 'Image'
+  } catch {
+    const cleanSrc = src.split('?')[0]
+    const segments = cleanSrc.split('/').filter(Boolean)
+    return segments[segments.length - 1] || 'Image'
+  }
+}
+
+function RichTextImageCard({ node, deleteNode, selected }: NodeViewProps) {
+  const src = String(node.attrs.src ?? '')
+  const nodeFilename = typeof node.attrs.filename === 'string' ? node.attrs.filename : null
+  const alt = typeof node.attrs.alt === 'string' ? node.attrs.alt : null
+  const title = typeof node.attrs.title === 'string' ? node.attrs.title : null
+  const width = typeof node.attrs.width === 'number' ? node.attrs.width : null
+  const height = typeof node.attrs.height === 'number' ? node.attrs.height : null
+  const filename = nodeFilename || getImageFilename(src)
+  const dimensions = formatImageDimensions(width, height)
+
+  return (
+    <NodeViewWrapper
+      className={cn(
+        'my-3',
+        'rounded-xl border bg-card shadow-xs transition-colors',
+        selected ? 'border-primary ring-2 ring-primary/20' : 'border-border',
+      )}
+      contentEditable={false}
+      data-drag-handle
+    >
+      <div className="flex items-start gap-3 p-3">
+        <div className="size-18 shrink-0 overflow-hidden rounded-lg border bg-muted">
+          <img src={src} alt={alt ?? filename} className="h-full w-full object-cover" />
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="truncate text-sm font-medium text-foreground" title={filename}>
+            {filename}
+          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {dimensions && <span>{dimensions}</span>}
+            {alt && <span className="truncate" title={alt}>Alt: {alt}</span>}
+          </div>
+          {title && (
+            <p className="line-clamp-2 text-xs text-muted-foreground" title={title}>
+              {title}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => deleteNode()}
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          aria-label="Remove image"
+        >
+          <Trash2Icon className="size-4" />
+        </button>
+      </div>
+    </NodeViewWrapper>
+  )
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -89,11 +165,15 @@ export function RichTextEditor({
         addAttributes() {
           return {
             ...this.parent?.(),
+            filename: { default: null },
             width: { default: null },
             height: { default: null },
           }
         },
-      }).configure({ HTMLAttributes: { class: 'max-w-full rounded' } }),
+        addNodeView() {
+          return ReactNodeViewRenderer(RichTextImageCard)
+        },
+      }).configure({ inline: false }),
     ],
     content: (() => {
       if (!value) return ''
@@ -139,6 +219,7 @@ export function RichTextEditor({
       .focus()
       .setImage({
         src: img.src,
+        filename: img.filename ?? undefined,
         alt: img.alt ?? undefined,
         title: img.title ?? undefined,
         width: img.width ?? undefined,

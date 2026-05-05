@@ -1675,6 +1675,7 @@ function RichTextInput({
       const data = await uploadMediaFile(file)
       resolveWith({
         src: data.url,
+        filename: data.filename,
         alt: data.alt,
         title: data.caption,
         width: data.width,
@@ -1756,6 +1757,7 @@ function RichTextInput({
         onSelect={(item) => {
           resolveWith({
             src: item.url,
+            filename: item.filename,
             alt: item.alt,
             title: item.caption,
             width: item.width,
