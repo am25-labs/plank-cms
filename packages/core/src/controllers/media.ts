@@ -13,11 +13,18 @@ type MediaRow = {
   mime_type: string | null
   size: number | null
   alt: string | null
+  caption: string | null
   width: number | null
   height: number | null
   folder_id: string | null
   uploaded_by: string | null
   created_at: Date
+}
+
+function buildDefaultAlt(filename: string): string {
+  const baseName = filename.split('/').pop() ?? filename
+  const withoutExtension = baseName.replace(/\.[^.]+$/, '').trim()
+  return withoutExtension || baseName.trim()
 }
 
 export async function listMedia(req: Request, res: Response): Promise<void> {
@@ -44,6 +51,7 @@ export async function listMedia(req: Request, res: Response): Promise<void> {
       mime_type: r.mime_type,
       size: r.size,
       alt: r.alt,
+      caption: r.caption,
       width: r.width,
       height: r.height,
       folder_id: r.folder_id,
@@ -87,9 +95,7 @@ export async function uploadMedia(req: Request, res: Response): Promise<void> {
     const prefix = [MEDIA_PREFIX, folderId, bundleId].filter(Boolean).join('/')
 
     // Strip the common root folder from relative paths (webkitRelativePath includes the folder name)
-    const rootDir = m3u8File.originalname.includes('/')
-      ? m3u8File.originalname.split('/')[0]
-      : null
+    const rootDir = m3u8File.originalname.includes('/') ? m3u8File.originalname.split('/')[0] : null
 
     const stripRoot = (path: string) =>
       rootDir && path.startsWith(`${rootDir}/`) ? path.slice(rootDir.length + 1) : path
@@ -107,42 +113,68 @@ export async function uploadMedia(req: Request, res: Response): Promise<void> {
     const m3u8Url = await provider.getUrl(m3u8Key)
     const id = createId()
     const filename = m3u8File.originalname.split('/').pop() ?? m3u8File.originalname
+    const alt = buildDefaultAlt(filename)
 
     await pool.query(
-      `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, folder_id, uploaded_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [id, filename, m3u8Url, m3u8Key, m3u8File.mimetype, m3u8File.size, folderId, req.user!.id],
+      `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, alt, folder_id, uploaded_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        id,
+        filename,
+        m3u8Url,
+        m3u8Key,
+        m3u8File.mimetype,
+        m3u8File.size,
+        alt,
+        folderId,
+        req.user!.id,
+      ],
     )
     // HLS bundles are video — no image dimensions to store
 
-    res.status(201).json({ id, url: m3u8Url, filename })
+    res.status(201).json({ id, url: m3u8Url, filename, alt, caption: null })
     return
   }
 
   // Regular single-file upload (local provider only — S3/R2 use presign + confirm)
   const file = files[0]
-  const { url, key } = await provider.upload(file, { prefix: folderId ? `${MEDIA_PREFIX}/${folderId}` : MEDIA_PREFIX })
+  const { url, key } = await provider.upload(file, {
+    prefix: folderId ? `${MEDIA_PREFIX}/${folderId}` : MEDIA_PREFIX,
+  })
   const id = createId()
   const width = req.body.width ? parseInt(req.body.width as string) : null
   const height = req.body.height ? parseInt(req.body.height as string) : null
+  const alt = buildDefaultAlt(file.originalname)
 
   await pool.query(
-    `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, alt, width, height, folder_id, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [id, file.originalname, url, key, file.mimetype, file.size, null, width, height, folderId, req.user!.id],
+    `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, alt, caption, width, height, folder_id, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [
+      id,
+      file.originalname,
+      url,
+      key,
+      file.mimetype,
+      file.size,
+      alt,
+      null,
+      width,
+      height,
+      folderId,
+      req.user!.id,
+    ],
   )
 
   const resolvedUrl = await provider.getUrl(key)
-  res.status(201).json({ id, url: resolvedUrl, filename: file.originalname, alt: null, width, height })
+  res
+    .status(201)
+    .json({ id, url: resolvedUrl, filename: file.originalname, alt, caption: null, width, height })
 }
 
 export async function deleteMedia(req: Request, res: Response): Promise<void> {
   const { id } = req.params
 
-  const { rows } = await pool.query<MediaRow>(
-    'SELECT * FROM plank_media WHERE id = $1',
-    [id],
-  )
+  const { rows } = await pool.query<MediaRow>('SELECT * FROM plank_media WHERE id = $1', [id])
 
   if (!rows[0]) {
     res.status(404).json({ error: 'Media not found' })
@@ -157,7 +189,11 @@ export async function deleteMedia(req: Request, res: Response): Promise<void> {
 }
 
 export async function presignMedia(req: Request, res: Response): Promise<void> {
-  const { filename, mimeType, folderId } = req.body as { filename: string; mimeType: string; folderId?: string | null }
+  const { filename, mimeType, folderId } = req.body as {
+    filename: string
+    mimeType: string
+    folderId?: string | null
+  }
   if (!filename || !mimeType) {
     res.status(400).json({ error: 'filename and mimeType are required' })
     return
@@ -172,7 +208,10 @@ export async function presignMedia(req: Request, res: Response): Promise<void> {
 
   if (folderId) {
     const { rows } = await pool.query('SELECT id FROM plank_folders WHERE id = $1', [folderId])
-    if (!rows[0]) { res.status(404).json({ error: 'Folder not found' }); return }
+    if (!rows[0]) {
+      res.status(404).json({ error: 'Folder not found' })
+      return
+    }
   }
 
   const prefix = folderId ? `${MEDIA_PREFIX}/${folderId}` : MEDIA_PREFIX
@@ -182,8 +221,13 @@ export async function presignMedia(req: Request, res: Response): Promise<void> {
 
 export async function confirmMedia(req: Request, res: Response): Promise<void> {
   const { key, filename, mimeType, size, folderId, width, height } = req.body as {
-    key: string; filename: string; mimeType: string; size?: number
-    folderId?: string | null; width?: number | null; height?: number | null
+    key: string
+    filename: string
+    mimeType: string
+    size?: number
+    folderId?: string | null
+    width?: number | null
+    height?: number | null
   }
   if (!key || !filename || !mimeType) {
     res.status(400).json({ error: 'key, filename and mimeType are required' })
@@ -193,30 +237,73 @@ export async function confirmMedia(req: Request, res: Response): Promise<void> {
   const provider = await getProvider()
   const url = await provider.getUrl(key)
   const id = createId()
+  const alt = buildDefaultAlt(filename)
 
   await pool.query(
-    `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, alt, width, height, folder_id, uploaded_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [id, filename, url, key, mimeType, size ?? null, null, width ?? null, height ?? null, folderId ?? null, req.user!.id],
+    `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, alt, caption, width, height, folder_id, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+    [
+      id,
+      filename,
+      url,
+      key,
+      mimeType,
+      size ?? null,
+      alt,
+      null,
+      width ?? null,
+      height ?? null,
+      folderId ?? null,
+      req.user!.id,
+    ],
   )
 
-  res.status(201).json({ id, url, filename, alt: null, width: width ?? null, height: height ?? null })
+  res
+    .status(201)
+    .json({ id, url, filename, alt, caption: null, width: width ?? null, height: height ?? null })
 }
 
 export async function updateMedia(req: Request, res: Response): Promise<void> {
   const { id } = req.params
-  const { filename, alt } = req.body as { filename?: string; alt?: string | null }
+  const { filename, alt, caption } = req.body as {
+    filename?: string
+    alt?: string | null
+    caption?: string | null
+  }
+
+  const updates: string[] = []
+  const values: unknown[] = []
+
+  if (typeof filename === 'string' && filename.trim()) {
+    values.push(filename.trim())
+    updates.push(`filename = $${values.length}`)
+  }
+  if (alt !== undefined) {
+    values.push(typeof alt === 'string' ? alt.trim() || null : null)
+    updates.push(`alt = $${values.length}`)
+  }
+  if (caption !== undefined) {
+    values.push(typeof caption === 'string' ? caption.trim() || null : null)
+    updates.push(`caption = $${values.length}`)
+  }
+
+  if (updates.length === 0) {
+    res.status(400).json({ error: 'No changes provided' })
+    return
+  }
 
   const { rows } = await pool.query<MediaRow>(
     `UPDATE plank_media
-     SET filename = COALESCE($1, filename),
-         alt      = $2
-     WHERE id = $3
+     SET ${updates.join(', ')}
+     WHERE id = $${values.length + 1}
      RETURNING *`,
-    [filename ?? null, alt ?? null, id],
+    [...values, id],
   )
 
-  if (!rows[0]) { res.status(404).json({ error: 'Media not found' }); return }
+  if (!rows[0]) {
+    res.status(404).json({ error: 'Media not found' })
+    return
+  }
 
   const provider = await getProvider()
   const url = await provider.getUrl(rows[0].provider_key)
@@ -226,10 +313,7 @@ export async function updateMedia(req: Request, res: Response): Promise<void> {
 export async function getMediaUrl(req: Request, res: Response): Promise<void> {
   const { id } = req.params
 
-  const { rows } = await pool.query<MediaRow>(
-    'SELECT * FROM plank_media WHERE id = $1',
-    [id],
-  )
+  const { rows } = await pool.query<MediaRow>('SELECT * FROM plank_media WHERE id = $1', [id])
 
   if (!rows[0]) {
     res.status(404).json({ error: 'Media not found' })

@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils.ts'
 export type ImageInsert = {
   src: string
   alt?: string | null
+  title?: string | null
   width?: number | null
   height?: number | null
 }
@@ -139,6 +140,7 @@ export function RichTextEditor({
       .setImage({
         src: img.src,
         alt: img.alt ?? undefined,
+        title: img.title ?? undefined,
         width: img.width ?? undefined,
         height: img.height ?? undefined,
       })

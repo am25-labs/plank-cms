@@ -139,6 +139,7 @@ type MediaItem = {
   mime_type: string | null
   size: number | null
   alt: string | null
+  caption: string | null
   width: number | null
   height: number | null
 }
@@ -777,7 +778,8 @@ function FloatInput({
 function normalizeMixedValue(value: unknown): MixedValue {
   if (typeof value === 'object' && value !== null) {
     const v = value as Record<string, unknown>
-    if (v.kind === 'string' && typeof v.value === 'string') return { kind: 'string', value: v.value }
+    if (v.kind === 'string' && typeof v.value === 'string')
+      return { kind: 'string', value: v.value }
     if (v.kind === 'number' && typeof v.value === 'number' && !isNaN(v.value)) {
       return { kind: 'number', value: v.value }
     }
@@ -1671,7 +1673,13 @@ function RichTextInput({
     setUploadError(null)
     try {
       const data = await uploadMediaFile(file)
-      resolveWith({ src: data.url, alt: data.alt, width: data.width, height: data.height })
+      resolveWith({
+        src: data.url,
+        alt: data.alt,
+        title: data.caption,
+        width: data.width,
+        height: data.height,
+      })
       setInsertOpen(false)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed.')
@@ -1746,7 +1754,13 @@ function RichTextInput({
         }}
         allowedTypes={['image']}
         onSelect={(item) => {
-          resolveWith({ src: item.url, alt: item.alt, width: item.width, height: item.height })
+          resolveWith({
+            src: item.url,
+            alt: item.alt,
+            title: item.caption,
+            width: item.width,
+            height: item.height,
+          })
           setPickerOpen(false)
           setInsertOpen(false)
         }}
@@ -1802,11 +1816,10 @@ export function FieldInput({
         ? (meta.localized as Record<string, unknown>)
         : {}
     if (localizationEnabled) {
-      const defaultLocale = typeof meta.__defaultLocale === 'string' ? meta.__defaultLocale : undefined
+      const defaultLocale =
+        typeof meta.__defaultLocale === 'string' ? meta.__defaultLocale : undefined
       const defaultLocaleValues =
-        defaultLocale &&
-        localized[defaultLocale] &&
-        typeof localized[defaultLocale] === 'object'
+        defaultLocale && localized[defaultLocale] && typeof localized[defaultLocale] === 'object'
           ? (localized[defaultLocale] as Record<string, unknown>)
           : null
       if (

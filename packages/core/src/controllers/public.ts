@@ -25,6 +25,35 @@ type Row = Record<string, unknown> & {
 }
 type LocalizedValues = Record<string, Record<string, unknown>>
 
+type MediaValue = {
+  id: string | null
+  url: string
+  alt: string | null
+  figcaption: string | null
+  width: number | null
+  height: number | null
+}
+
+function createMediaValue(
+  url: string,
+  options?: {
+    id?: string | null
+    alt?: string | null
+    figcaption?: string | null
+    width?: number | null
+    height?: number | null
+  },
+): MediaValue {
+  return {
+    id: options?.id ?? null,
+    url,
+    alt: options?.alt ?? null,
+    figcaption: options?.figcaption ?? null,
+    width: options?.width ?? null,
+    height: options?.height ?? null,
+  }
+}
+
 function normalizeNavigationItems(value: unknown): unknown {
   if (!Array.isArray(value)) return value
   return value.map((item) => {
@@ -99,32 +128,53 @@ async function resolveMediaFields(
       }
     }
   }
-  if (idSet.size === 0) return
+  const mediaMap = new Map<string, MediaValue>()
+  if (idSet.size > 0) {
+    const { rows } = await pool.query<{
+      id: string
+      provider_key: string
+      alt: string | null
+      caption: string | null
+      width: number | null
+      height: number | null
+    }>('SELECT id, provider_key, alt, caption, width, height FROM plank_media WHERE id = ANY($1)', [
+      [...idSet],
+    ])
 
-  const { rows } = await pool.query<{ id: string; provider_key: string }>(
-    'SELECT id, provider_key FROM plank_media WHERE id = ANY($1)',
-    [[...idSet]],
-  )
-
-  const provider = await getProvider()
-  const urlMap = new Map<string, string>()
-  await Promise.all(
-    rows.map(async (r) => {
-      urlMap.set(r.id, await provider.getUrl(r.provider_key))
-    }),
-  )
+    const provider = await getProvider()
+    await Promise.all(
+      rows.map(async (r) => {
+        mediaMap.set(
+          r.id,
+          createMediaValue(await provider.getUrl(r.provider_key), {
+            id: r.id,
+            alt: r.alt,
+            figcaption: r.caption,
+            width: r.width,
+            height: r.height,
+          }),
+        )
+      }),
+    )
+  }
 
   for (const entry of entries) {
     for (const name of singleFields) {
       const val = entry[name]
-      if (typeof val === 'string' && urlMap.has(val)) entry[name] = urlMap.get(val)
+      if (typeof val === 'string' && val.startsWith('http')) {
+        entry[name] = createMediaValue(val)
+        continue
+      }
+      if (typeof val === 'string' && mediaMap.has(val)) entry[name] = mediaMap.get(val)
     }
     for (const name of galleryFields) {
       const val = entry[name]
       if (Array.isArray(val)) {
-        entry[name] = val.map((id) =>
-          typeof id === 'string' && urlMap.has(id) ? urlMap.get(id) : id,
-        )
+        entry[name] = val.map((item) => {
+          if (typeof item === 'string' && item.startsWith('http')) return createMediaValue(item)
+          if (typeof item === 'string' && mediaMap.has(item)) return mediaMap.get(item)
+          return item
+        })
       }
     }
   }

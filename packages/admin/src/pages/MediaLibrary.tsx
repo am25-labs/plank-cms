@@ -30,6 +30,7 @@ import { Spinner } from '@/components/ui/spinner.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
 import { Input } from '@/components/ui/input.tsx'
 import { Label } from '@/components/ui/label.tsx'
+import { Textarea } from '@/components/ui/textarea.tsx'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -62,6 +63,7 @@ type MediaItem = {
   mime_type: string | null
   size: number | null
   alt: string | null
+  caption: string | null
   width: number | null
   height: number | null
   folder_id: string | null
@@ -79,6 +81,12 @@ function formatBytes(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function buildDefaultAlt(filename: string): string {
+  const baseName = filename.split('/').pop() ?? filename
+  const withoutExtension = baseName.replace(/\.[^.]+$/, '').trim()
+  return withoutExtension || baseName.trim()
 }
 
 function isImage(mime: string | null) {
@@ -170,7 +178,7 @@ function MediaPreviewContent({ item }: { item: MediaItem }) {
     return (
       <img
         src={item.url}
-        alt={item.filename}
+        alt={item.alt ?? item.filename}
         className="max-h-full max-w-full rounded-md object-contain"
       />
     )
@@ -324,7 +332,11 @@ function MediaCard({
         }}
       >
         {isImage(mime) ? (
-          <img src={item.url} alt={item.filename} className="h-full w-full object-cover" />
+          <img
+            src={item.url}
+            alt={item.alt ?? item.filename}
+            className="h-full w-full object-cover"
+          />
         ) : isVideo(mime) || isHLS(item.url, mime) ? (
           <FileVideoIcon className="size-10 text-muted-foreground" />
         ) : isAudio(mime) ? (
@@ -397,6 +409,7 @@ export function MediaLibrary() {
   const [preview, setPreview] = useState<MediaItem | null>(null)
   const [editFilename, setEditFilename] = useState('')
   const [editAlt, setEditAlt] = useState('')
+  const [editCaption, setEditCaption] = useState('')
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [toDelete, setToDelete] = useState<MediaItem | null>(null)
@@ -572,6 +585,23 @@ export function MediaLibrary() {
     })
   }
 
+  function openPreview(item: MediaItem) {
+    setPreview(item)
+    setEditFilename(item.filename)
+    setEditAlt(item.alt ?? buildDefaultAlt(item.filename))
+    setEditCaption(item.caption ?? '')
+    setEditError(null)
+  }
+
+  function handleFilenameChange(nextFilename: string) {
+    setEditFilename(nextFilename)
+    const previousDefaultAlt = buildDefaultAlt(editFilename)
+    const nextDefaultAlt = buildDefaultAlt(nextFilename)
+    if (!editAlt.trim() || editAlt === previousDefaultAlt) {
+      setEditAlt(nextDefaultAlt)
+    }
+  }
+
   const folders = folderData?.folders ?? []
   const items = mediaData?.items ?? []
   const allKeys = [...folders.map((f) => `folder:${f.id}`), ...items.map((i) => i.id)]
@@ -628,7 +658,10 @@ export function MediaLibrary() {
               <FolderPlusIcon className="size-4" />
               New folder
             </Button>
-            <Button onClick={() => inputRef.current?.click()} disabled={uploading || !canWriteMedia}>
+            <Button
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading || !canWriteMedia}
+            >
               {uploading ? <Spinner className="size-4" /> : <UploadIcon className="size-4" />}
               {uploading ? 'Uploading…' : 'Upload'}
             </Button>
@@ -760,12 +793,7 @@ export function MediaLibrary() {
                     key={item.id}
                     item={item}
                     onDelete={setToDelete}
-                    onPreview={(item) => {
-                      setPreview(item)
-                      setEditFilename(item.filename)
-                      setEditAlt(item.alt ?? '')
-                      setEditError(null)
-                    }}
+                    onPreview={openPreview}
                     canDelete={canDeleteMedia}
                     selected={selected.has(item.id)}
                     onToggle={toggleOne}
@@ -783,42 +811,19 @@ export function MediaLibrary() {
             if (!o) {
               setPreview(null)
               setEditError(null)
+              setEditCaption('')
             }
           }}
         >
-          <DialogContent className="sm:max-w-4xl h-[80vh] flex flex-col">
+          <DialogContent className="sm:max-w-5xl max-h-[85vh] overflow-hidden p-0">
             <DialogHeader>
-              <DialogTitle className="truncate pr-6" title={preview?.filename}>
+              <DialogTitle className="truncate px-6 pt-6 pr-12" title={preview?.filename}>
                 {preview?.filename}
               </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden">
-              {preview && <MediaPreviewContent item={preview} />}
-            </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{preview?.mime_type ?? '—'}</span>
-              <div className="flex items-center gap-3">
-                {preview?.width && preview?.height && (
-                  <span>
-                    {preview.width} × {preview.height}
-                  </span>
-                )}
-                <span>{formatBytes(preview?.size ?? null)}</span>
-                <a
-                  href={preview?.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  download={preview?.filename}
-                >
-                  <Button variant="ghost" size="sm" className="h-7 px-2">
-                    <DownloadIcon className="size-3.5" />
-                  </Button>
-                </a>
-              </div>
-            </div>
-            {preview && isImage(preview.mime_type) && (
+            {preview && (
               <form
-                className="flex flex-col gap-3 border-t pt-3"
+                className="grid max-h-[calc(85vh-4rem)] min-h-0 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]"
                 onSubmit={async (e) => {
                   e.preventDefault()
                   setEditSaving(true)
@@ -833,12 +838,13 @@ export function MediaLibrary() {
                       },
                       body: JSON.stringify({
                         filename: editFilename || preview.filename,
-                        alt: editAlt || null,
+                        alt: editAlt.trim() || null,
+                        caption: editCaption.trim() || null,
                       }),
                     })
                     if (!res.ok) throw new Error('Save failed.')
                     const updated = (await res.json()) as MediaItem
-                    setPreview(updated)
+                    openPreview(updated)
                     refetchMedia()
                   } catch (err) {
                     setEditError(err instanceof Error ? err.message : 'Save failed.')
@@ -847,33 +853,86 @@ export function MediaLibrary() {
                   }
                 }}
               >
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs">Filename</Label>
-                    <Input
-                      value={editFilename}
-                      onChange={(e) => setEditFilename(e.target.value)}
-                      placeholder={preview.filename}
-                      className="h-8 text-sm"
-                      disabled={!canWriteMedia}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs">Alt text</Label>
-                    <Input
-                      value={editAlt}
-                      onChange={(e) => setEditAlt(e.target.value)}
-                      placeholder="Describe the image…"
-                      className="h-8 text-sm"
-                      disabled={!canWriteMedia}
-                    />
+                <div className="flex min-h-0 items-center justify-center overflow-hidden bg-muted/30 px-6 py-4">
+                  <div className="flex h-full w-full min-h-[280px] items-center justify-center overflow-hidden rounded-xl border bg-background/70 p-4">
+                    <MediaPreviewContent item={preview} />
                   </div>
                 </div>
-                {editError && <p className="text-xs text-destructive">{editError}</p>}
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm" disabled={editSaving || !canWriteMedia}>
-                    {editSaving ? 'Saving…' : 'Save'}
-                  </Button>
+                <div className="flex min-h-0 flex-col border-t lg:border-l lg:border-t-0">
+                  <div className="grid grid-cols-2 gap-3 border-b px-6 py-4 text-xs text-muted-foreground">
+                    <div>
+                      <p className="mb-1 font-medium text-foreground">Type</p>
+                      <p className="break-all">{preview.mime_type ?? '—'}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium text-foreground">Size</p>
+                      <p>{formatBytes(preview.size ?? null)}</p>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium text-foreground">Dimensions</p>
+                      <p>
+                        {preview.width && preview.height
+                          ? `${preview.width} × ${preview.height}`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 font-medium text-foreground">Created</p>
+                      <p>{new Date(preview.created_at).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs">Filename</Label>
+                      <Input
+                        value={editFilename}
+                        onChange={(e) => handleFilenameChange(e.target.value)}
+                        placeholder={preview.filename}
+                        className="text-sm"
+                        disabled={!canWriteMedia}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs">Alt text</Label>
+                      <Input
+                        value={editAlt}
+                        onChange={(e) => setEditAlt(e.target.value)}
+                        placeholder={buildDefaultAlt(editFilename || preview.filename)}
+                        className="text-sm"
+                        disabled={!canWriteMedia}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Defaulted from the filename without extension. You can override it.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs">Subtitle</Label>
+                      <Textarea
+                        value={editCaption}
+                        onChange={(e) => setEditCaption(e.target.value)}
+                        placeholder="Used as figcaption in the frontend…"
+                        className="min-h-28 resize-none text-sm"
+                        disabled={!canWriteMedia}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                      <a
+                        href={preview.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        download={preview.filename}
+                      >
+                        <Button variant="outline" size="sm" type="button">
+                          <DownloadIcon className="size-3.5" />
+                          Download
+                        </Button>
+                      </a>
+                      <Button type="submit" size="sm" disabled={editSaving || !canWriteMedia}>
+                        {editSaving ? 'Saving…' : 'Save'}
+                      </Button>
+                    </div>
+                    {editError && <p className="text-xs text-destructive">{editError}</p>}
+                  </div>
                 </div>
               </form>
             )}
@@ -905,7 +964,10 @@ export function MediaLibrary() {
               <Button variant="outline" onClick={() => setNewFolderOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateFolder} disabled={folderSaving || !newFolderName.trim() || !canWriteMedia}>
+              <Button
+                onClick={handleCreateFolder}
+                disabled={folderSaving || !newFolderName.trim() || !canWriteMedia}
+              >
                 {folderSaving ? 'Creating…' : 'Create'}
               </Button>
             </DialogFooter>
@@ -936,7 +998,10 @@ export function MediaLibrary() {
               <Button variant="outline" onClick={() => setFolderToRename(null)}>
                 Cancel
               </Button>
-              <Button onClick={handleRenameFolder} disabled={folderSaving || !renameValue.trim() || !canWriteMedia}>
+              <Button
+                onClick={handleRenameFolder}
+                disabled={folderSaving || !renameValue.trim() || !canWriteMedia}
+              >
                 {folderSaving ? 'Saving…' : 'Save'}
               </Button>
             </DialogFooter>
@@ -964,7 +1029,11 @@ export function MediaLibrary() {
               <Button variant="outline" onClick={() => setToDelete(null)}>
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleDeleteMedia} disabled={deleting || !canDeleteMedia}>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteMedia}
+                disabled={deleting || !canDeleteMedia}
+              >
                 {deleting ? 'Deleting…' : 'Delete'}
               </Button>
             </DialogFooter>
@@ -992,7 +1061,11 @@ export function MediaLibrary() {
               <Button variant="outline" onClick={() => setFolderToDelete(null)}>
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={handleDeleteFolder} disabled={deleting || !canDeleteMedia}>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteFolder}
+                disabled={deleting || !canDeleteMedia}
+              >
                 {deleting ? 'Deleting…' : 'Delete'}
               </Button>
             </DialogFooter>
