@@ -111,7 +111,7 @@ type Entry = Record<string, unknown> & {
 type EntriesResponse = { data: Entry[]; total: number; page: number; limit: number }
 
 type ColSort = { field: string; dir: 'asc' | 'desc' }
-type ViewConfig = { visibleFields: string[]; sort: ColSort }
+type ViewConfig = { visibleFields: string[]; visibleSystemCols: string[]; sort: ColSort }
 
 // Helpers
 
@@ -123,6 +123,12 @@ const SYSTEM_SORT_OPTIONS = [
   { name: 'updated_at', label: 'Updated' },
   { name: 'published_at', label: 'Published' },
 ]
+
+const SYSTEM_COL_DEFS = [
+  { name: 'created_at', label: 'Created' },
+  { name: 'updated_at', label: 'Updated' },
+  { name: 'pub_sch', label: 'Pub / Sch' },
+] as const
 
 function humanize(name: string) {
   return name.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -233,6 +239,7 @@ function RelationValueCell({
 function defaultViewConfig(allFields: FieldDef[]): ViewConfig {
   return {
     visibleFields: allFields.slice(0, DEFAULT_VISIBLE).map((f) => f.name),
+    visibleSystemCols: SYSTEM_COL_DEFS.map((c) => c.name),
     sort: DEFAULT_SORT,
   }
 }
@@ -243,9 +250,13 @@ function parseViewConfig(saved: Partial<ViewConfig> | null, allFields: FieldDef[
     const base = String(n).split('.')[0]
     return allFields.some((f) => f.name === base)
   })
+  const visibleSystemCols = Array.isArray(saved.visibleSystemCols)
+    ? saved.visibleSystemCols.filter((n) => SYSTEM_COL_DEFS.some((c) => c.name === n))
+    : SYSTEM_COL_DEFS.map((c) => c.name)
   return {
     visibleFields:
       visible.length > 0 ? visible : allFields.slice(0, DEFAULT_VISIBLE).map((f) => f.name),
+    visibleSystemCols,
     sort: saved.sort ?? DEFAULT_SORT,
   }
 }
@@ -467,11 +478,13 @@ function ConfigureViewDialog({
   onApply: (cfg: ViewConfig) => void
 }) {
   const [visible, setVisible] = useState<string[]>(config.visibleFields)
+  const [visibleSysCols, setVisibleSysCols] = useState<string[]>(config.visibleSystemCols)
   const [sort, setSort] = useState<ColSort>(config.sort)
 
   useEffect(() => {
     if (open) {
       setVisible(config.visibleFields)
+      setVisibleSysCols(config.visibleSystemCols)
       setSort(config.sort)
     }
   }, [open, config])
@@ -571,7 +584,7 @@ function ConfigureViewDialog({
             <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Displayed fields
             </p>
-            {visible.length === 0 ? (
+            {visible.length === 0 && visibleSysCols.length === 0 ? (
               <p className="text-sm text-muted-foreground py-2">No fields selected.</p>
             ) : (
               <ul className="space-y-1 overflow-y-auto flex-1 min-h-0">
@@ -619,12 +632,49 @@ function ConfigureViewDialog({
                     </li>
                   )
                 })}
+                {visibleSysCols.map((name) => {
+                  const col = SYSTEM_COL_DEFS.find((c) => c.name === name)
+                  if (!col) return null
+                  return (
+                    <li
+                      key={name}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                    >
+                      <span className="flex-1 font-medium">{col.label}</span>
+                      <span className="text-xs text-muted-foreground">system</span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled
+                        className="flex size-6 items-center justify-center rounded text-muted-foreground disabled:opacity-30"
+                      >
+                        <ChevronUpIcon className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled
+                        className="flex size-6 items-center justify-center rounded text-muted-foreground disabled:opacity-30"
+                      >
+                        <ChevronDownIcon className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setVisibleSysCols((prev) => prev.filter((n) => n !== name))}
+                        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <MinusCircleIcon className="size-3.5" />
+                      </Button>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </div>
 
           {/* Available fields */}
-          {hidden.length > 0 && (
+          {(hidden.length > 0 || visibleSysCols.length < SYSTEM_COL_DEFS.length) && (
             <div className="flex flex-col flex-1 min-h-0">
               <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide flex-none">
                 Available fields
@@ -640,6 +690,22 @@ function ConfigureViewDialog({
                     <button
                       type="button"
                       onClick={() => add(field.name)}
+                      className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <PlusCircleIcon className="size-3.5" />
+                    </button>
+                  </li>
+                ))}
+                {SYSTEM_COL_DEFS.filter((c) => !visibleSysCols.includes(c.name)).map((col) => (
+                  <li
+                    key={col.name}
+                    className="flex items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground"
+                  >
+                    <span className="flex-1">{col.label}</span>
+                    <span className="text-xs">system</span>
+                    <button
+                      type="button"
+                      onClick={() => setVisibleSysCols((prev) => [...prev, col.name])}
                       className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                     >
                       <PlusCircleIcon className="size-3.5" />
@@ -693,7 +759,7 @@ function ConfigureViewDialog({
           </Button>
           <Button
             onClick={() => {
-              onApply({ visibleFields: visible, sort })
+              onApply({ visibleFields: visible, visibleSystemCols: visibleSysCols, sort })
               onOpenChange(false)
             }}
           >
@@ -911,7 +977,7 @@ export function EntriesList() {
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setConfigOpen(true)} className="gap-1.5">
               <Settings2Icon className="size-3.5" />
-              Configure the view
+              View config
             </Button>
             {canWriteEntries && (
               <Button onClick={() => navigate(`/content/${slug}/new`)} className="gap-2">
@@ -999,15 +1065,21 @@ export function EntriesList() {
                         {humanize(col.field.name)}
                       </TableHead>
                     ))}
-                    <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
-                      Created
-                    </TableHead>
-                    <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
-                      Updated
-                    </TableHead>
-                    <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
-                      Pub / Sch
-                    </TableHead>
+                    {config.visibleSystemCols.includes('created_at') && (
+                      <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
+                        Created
+                      </TableHead>
+                    )}
+                    {config.visibleSystemCols.includes('updated_at') && (
+                      <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
+                        Updated
+                      </TableHead>
+                    )}
+                    {config.visibleSystemCols.includes('pub_sch') && (
+                      <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
+                        Pub / Sch
+                      </TableHead>
+                    )}
                     <TableHead className="px-4 py-3 text-left font-medium text-muted-foreground">
                       Status
                     </TableHead>
@@ -1059,19 +1131,25 @@ export function EntriesList() {
                           </TableCell>
                         )
                       })}
-                      <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {formatDate(entry.created_at, timezone)}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {formatDate(entry.updated_at, timezone)}
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                        {entry.status === 'scheduled' && entry.scheduled_for
-                          ? formatDate(entry.scheduled_for, timezone)
-                          : entry.published_at
-                            ? formatDate(entry.published_at, timezone)
-                            : '—'}
-                      </TableCell>
+                      {config.visibleSystemCols.includes('created_at') && (
+                        <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                          {formatDate(entry.created_at, timezone)}
+                        </TableCell>
+                      )}
+                      {config.visibleSystemCols.includes('updated_at') && (
+                        <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                          {formatDate(entry.updated_at, timezone)}
+                        </TableCell>
+                      )}
+                      {config.visibleSystemCols.includes('pub_sch') && (
+                        <TableCell className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                          {entry.status === 'scheduled' && entry.scheduled_for
+                            ? formatDate(entry.scheduled_for, timezone)
+                            : entry.published_at
+                              ? formatDate(entry.published_at, timezone)
+                              : '—'}
+                        </TableCell>
+                      )}
                       <TableCell className="px-4 py-3">
                         <StatusBadge entry={entry} fields={ct.fields} />
                       </TableCell>
