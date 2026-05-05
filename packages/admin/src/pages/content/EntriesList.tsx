@@ -581,9 +581,10 @@ function ConfigureViewDialog({
         </DialogHeader>
 
         <div className="flex flex-col flex-1 min-h-0 gap-5 py-1">
+          <div className={hidden.length > 0 || visibleSysCols.length < SYSTEM_COL_DEFS.length ? 'flex-1 min-h-0 grid gap-5 [grid-template-rows:minmax(7rem,1fr)_minmax(7rem,1fr)]' : 'flex-1 min-h-0 flex flex-col'}>
           {/* Displayed fields */}
-          <div className="flex flex-col flex-1 min-h-0">
-            <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          <div className="flex flex-col min-h-0">
+            <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide flex-none">
               Displayed fields
             </p>
             {visible.length === 0 && visibleSysCols.length === 0 ? (
@@ -677,7 +678,7 @@ function ConfigureViewDialog({
 
           {/* Available fields */}
           {(hidden.length > 0 || visibleSysCols.length < SYSTEM_COL_DEFS.length) && (
-            <div className="flex flex-col flex-1 min-h-0">
+            <div className="flex flex-col min-h-0">
               <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide flex-none">
                 Available fields
               </p>
@@ -717,6 +718,7 @@ function ConfigureViewDialog({
               </ul>
             </div>
           )}
+          </div>
 
           {/* Sort */}
           <div className="flex-none">
