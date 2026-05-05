@@ -12,6 +12,7 @@ import {
   HomeIcon,
   PencilIcon,
   EllipsisIcon,
+  SearchIcon,
 } from 'lucide-react'
 import {
   Breadcrumb,
@@ -44,6 +45,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog.tsx'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination.tsx'
 import HeaderFixed from '@/components/Header'
 
 // Types
@@ -70,7 +78,7 @@ type MediaItem = {
   created_at: string
 }
 
-type MediaList = { items: MediaItem[]; total: number }
+type MediaList = { items: MediaItem[]; total: number; page: number; limit: number; pages: number }
 type FolderList = { folders: Folder[] }
 type BreadcrumbEntry = { id: string | null; name: string }
 
@@ -386,6 +394,25 @@ export function MediaLibrary() {
 
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbEntry[]>([{ id: null, name: 'Media' }])
   const currentFolderId = breadcrumb[breadcrumb.length - 1].id
+  const [page, setPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setPage(1)
+    setSearchQuery('')
+    setDebouncedSearch('')
+  }, [currentFolderId])
+
+  const MEDIA_LIMIT = 48
 
   const {
     data: folderData,
@@ -396,7 +423,9 @@ export function MediaLibrary() {
     data: mediaData,
     loading: mediaLoading,
     refetch: refetchMedia,
-  } = useFetch<MediaList>(`/cms/admin/media?folder_id=${currentFolderId ?? ''}`)
+  } = useFetch<MediaList>(
+    `/cms/admin/media?folder_id=${currentFolderId ?? ''}&page=${page}&limit=${MEDIA_LIMIT}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}`,
+  )
 
   const refetch = useCallback(() => {
     refetchFolders()
@@ -639,12 +668,7 @@ export function MediaLibrary() {
       {/* Header */}
       <HeaderFixed>
         <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold -mt-2">Media Library</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {mediaData ? `${mediaData.total} file${mediaData.total !== 1 ? 's' : ''}` : ''}
-            </p>
-          </div>
+          <h1 className="text-2xl font-bold -mt-2">Media Library</h1>
 
           <div className="flex items-center gap-2">
             <Button
@@ -670,6 +694,24 @@ export function MediaLibrary() {
       </HeaderFixed>
 
       <section className="mt-24">
+        {/* Search + count */}
+        <div className="mb-4 flex items-center gap-3">
+          <div className="relative max-w-72 w-full">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-9"
+              placeholder="Search media…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {!mediaLoading && mediaData != null && (
+            <span className="text-sm text-muted-foreground">
+              {mediaData.total} {mediaData.total === 1 ? 'file' : 'files'}
+            </span>
+          )}
+        </div>
+
         {/* Breadcrumb */}
         {breadcrumb.length > 1 && (
           <Breadcrumb className="mb-4">
@@ -801,6 +843,32 @@ export function MediaLibrary() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {(mediaData?.pages ?? 0) > 1 && (
+          <div className="mt-4">
+            <Pagination className="mx-0 w-auto justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); if (page > 1) setPage(page - 1) }}
+                    aria-disabled={page === 1}
+                    className={page === 1 ? 'pointer-events-none opacity-50' : ''}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); if (page < (mediaData?.pages ?? 1)) setPage(page + 1) }}
+                    aria-disabled={page === (mediaData?.pages ?? 1)}
+                    className={page === (mediaData?.pages ?? 1) ? 'pointer-events-none opacity-50' : ''}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         )}
 

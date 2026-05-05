@@ -32,14 +32,17 @@ export async function listMedia(req: Request, res: Response): Promise<void> {
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 24))
   const offset = (page - 1) * limit
   const folderId = (req.query.folder_id as string) || null
+  const search = req.query.search ? String(req.query.search).trim() : null
+  const searchTerm = search ? `%${search}%` : null
 
   const { rows } = await pool.query<MediaRow & { total: string }>(
     `SELECT *, COUNT(*) OVER() AS total
      FROM plank_media
      WHERE folder_id IS NOT DISTINCT FROM $3
+       AND ($4::text IS NULL OR filename ILIKE $4 OR alt ILIKE $4 OR caption ILIKE $4)
      ORDER BY created_at DESC
      LIMIT $1 OFFSET $2`,
-    [limit, offset, folderId],
+    [limit, offset, folderId, searchTerm],
   )
 
   const provider = await getProvider()
