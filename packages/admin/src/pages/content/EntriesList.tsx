@@ -15,6 +15,7 @@ import {
   MinusCircleIcon,
   FileIcon,
   CalendarClockIcon,
+  SearchIcon,
 } from 'lucide-react'
 import { useFetch } from '@/hooks/useFetch.ts'
 import { useApi } from '@/hooks/useApi.ts'
@@ -49,6 +50,7 @@ import {
 import { UserAvatar } from '@/components/ui/custom/UserAvatar.tsx'
 import { PaginationWrap } from '@/components/ui/custom/PaginationWrap.tsx'
 import { Checkbox } from '@/components/ui/checkbox.tsx'
+import { Input } from '@/components/ui/input.tsx'
 import {
   Tooltip,
   TooltipTrigger,
@@ -809,7 +811,17 @@ export function EntriesList() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const { loading: deleting, request: requestDelete } = useApi()
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery)
+      setPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   const { data: ct, loading: loadingCt } = useFetch<ContentType>(
     slug ? `/cms/admin/content-types/${slug}` : null,
@@ -828,6 +840,7 @@ export function EntriesList() {
 
   const config = viewConfig ?? {
     visibleFields: ct?.fields.slice(0, DEFAULT_VISIBLE).map((f) => f.name) ?? [],
+    visibleSystemCols: SYSTEM_COL_DEFS.map((c) => c.name),
     sort: DEFAULT_SORT,
   }
   const { sort } = config
@@ -844,13 +857,17 @@ export function EntriesList() {
     })
     .filter(Boolean) as Column[]
 
+  const searchableFields = (ct?.fields ?? [])
+    .filter((f) => ['string', 'uid', 'text', 'richtext'].includes(f.type))
+    .map((f) => f.name)
+
   const {
     data: entries,
     loading: loadingEntries,
     refetch,
   } = useFetch<EntriesResponse>(
     slug && viewConfig
-      ? `/cms/admin/content-types/${slug}/entries?page=${page}&limit=${limit}&sort=${sort.field}&order=${sort.dir}`
+      ? `/cms/admin/content-types/${slug}/entries?page=${page}&limit=${limit}&sort=${sort.field}&order=${sort.dir}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}&searchFields=${searchableFields.join(',')}` : ''}`
       : null,
   )
 
@@ -870,9 +887,7 @@ export function EntriesList() {
   const isOwnEntry = (entry: Entry) => String(entry.created_by ?? '') === String(user?.id ?? '')
   const isReviewDisabledForRole = (_entry: Entry) => false
   const canEditEntry = (entry: Entry) =>
-    canWriteEntries &&
-    (!isContributorRole || isOwnEntry(entry)) &&
-    !isReviewDisabledForRole(entry)
+    canWriteEntries && (!isContributorRole || isOwnEntry(entry)) && !isReviewDisabledForRole(entry)
   const canDeleteEntry = (entry: Entry) =>
     canDeleteEntries && (!isOwnershipRestrictedDeleteRole || isOwnEntry(entry))
   const editableSelectedIds = [...selected].filter((id) => {
@@ -990,6 +1005,23 @@ export function EntriesList() {
       </HeaderFixed>
 
       <section className="mt-24">
+        <div className="mb-3 flex items-center gap-3">
+          <div className="relative max-w-72 w-full">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              className="pl-9"
+              placeholder="Search entries…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {!loadingEntries && entries != null && (
+            <span className="text-muted-foreground">
+              {entries.total} {entries.total === 1 ? 'entry' : 'entries'}
+            </span>
+          )}
+        </div>
+
         {loadingEntries && (
           <div className="flex items-center gap-2 py-12 text-muted-foreground">
             <Spinner className="size-4" />
@@ -997,7 +1029,7 @@ export function EntriesList() {
           </div>
         )}
 
-        {!loadingEntries && (entries?.data ?? []).length === 0 && (
+        {!loadingEntries && (entries?.data ?? []).length === 0 && !debouncedSearch && (
           <Empty className="border">
             <EmptyHeader>
               <EmptyMedia variant="icon">
@@ -1011,6 +1043,18 @@ export function EntriesList() {
                 <Button onClick={() => navigate(`/content/${slug}/new`)}>New entry</Button>
               )}
             </EmptyContent>
+          </Empty>
+        )}
+
+        {!loadingEntries && (entries?.data ?? []).length === 0 && debouncedSearch && (
+          <Empty className="border">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SearchIcon />
+              </EmptyMedia>
+              <EmptyTitle>No results</EmptyTitle>
+              <EmptyDescription>No entries match "{debouncedSearch}".</EmptyDescription>
+            </EmptyHeader>
           </Empty>
         )}
 

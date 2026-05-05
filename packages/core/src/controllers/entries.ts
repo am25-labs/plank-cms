@@ -140,6 +140,35 @@ export const listEntries: SlugParam = async (req, res) => {
   const locale = req.query.locale ? String(req.query.locale) : undefined
   const fallbacks = req.query.fallback ? String(req.query.fallback).split(',') : []
 
+  const search = req.query.search ? String(req.query.search).trim() : ''
+  const rawSearchFields = req.query.searchFields ? String(req.query.searchFields).split(',') : []
+  const textLikeTypes = ['string', 'uid', 'text', 'richtext']
+  const searchFields = rawSearchFields.filter((name) =>
+    ct.fields.some((f) => f.name === name && textLikeTypes.includes(f.type)),
+  )
+
+  let mainWhereClause = ''
+  let countWhereClause = ''
+  const mainParams: unknown[] = [limit, offset]
+  const countParams: unknown[] = []
+
+  if (search && searchFields.length > 0) {
+    const term = `%${search}%`
+    mainParams.push(term)
+    countParams.push(term)
+    const mainIdx = mainParams.length   // 3
+    const countIdx = countParams.length // 1
+    const mainConditions = searchFields.map((name) => {
+      assertSafeIdentifier(name)
+      return `e.${quoteIdentifier(name)}::text ILIKE $${mainIdx}`
+    })
+    const countConditions = searchFields.map((name) => {
+      return `e.${quoteIdentifier(name)}::text ILIKE $${countIdx}`
+    })
+    mainWhereClause = `WHERE (${mainConditions.join(' OR ')})`
+    countWhereClause = `WHERE (${countConditions.join(' OR ')})`
+  }
+
   const [{ rows }, { rows: countRows }] = await Promise.all([
     pool.query(
       `SELECT e.*, u.first_name AS _author_first_name, u.last_name AS _author_last_name, u.avatar_url AS _author_avatar_url,
@@ -147,11 +176,15 @@ export const listEntries: SlugParam = async (req, res) => {
        FROM ${quotedTableName} e
        LEFT JOIN plank_users u ON u.id = e.created_by
        LEFT JOIN plank_users ed ON ed.id = e.editor_id
+       ${mainWhereClause}
        ORDER BY e.${quotedSortField} ${sortDir}
        LIMIT $1 OFFSET $2`,
-      [limit, offset],
+      mainParams,
     ),
-    pool.query(`SELECT COUNT(*) as count FROM ${quotedTableName}`),
+    pool.query(
+      `SELECT COUNT(*) as count FROM ${quotedTableName} e ${countWhereClause}`,
+      countParams,
+    ),
   ])
 
   const provider = await getProvider()
