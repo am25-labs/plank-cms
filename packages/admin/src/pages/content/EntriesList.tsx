@@ -575,7 +575,7 @@ function ConfigureViewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md h-[80vh] flex flex-col">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-none">
           <DialogTitle>Configure the view</DialogTitle>
         </DialogHeader>

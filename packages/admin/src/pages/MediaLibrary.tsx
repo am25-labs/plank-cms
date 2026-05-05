@@ -875,7 +875,7 @@ export function MediaLibrary() {
             }
           }}
         >
-          <DialogContent className="sm:max-w-5xl max-h-[85vh] overflow-hidden p-0">
+          <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-hidden p-0">
             <DialogHeader>
               <DialogTitle className="truncate px-6 pt-6 pr-12" title={preview?.filename}>
                 {preview?.filename}
@@ -883,7 +883,7 @@ export function MediaLibrary() {
             </DialogHeader>
             {preview && (
               <form
-                className="grid max-h-[calc(85vh-4rem)] min-h-0 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]"
+                className="grid max-h-[calc(90vh-4rem)] min-h-0 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]"
                 onSubmit={async (e) => {
                   e.preventDefault()
                   setEditSaving(true)
