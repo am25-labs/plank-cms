@@ -1016,8 +1016,9 @@ export function EntriesList() {
             />
           </div>
           {!loadingEntries && entries != null && (
-            <span className="text-muted-foreground">
-              {entries.total} {entries.total === 1 ? 'entry' : 'entries'}
+            <span className="text-muted-foreground text-sm">
+              {(entries?.data ?? []).length} / {entries.total}{' '}
+              {entries.total === 1 ? 'entry' : 'entries'}
             </span>
           )}
         </div>
