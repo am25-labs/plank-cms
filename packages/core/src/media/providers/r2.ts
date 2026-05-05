@@ -1,4 +1,10 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  DeleteObjectsCommand,
+} from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { extname } from 'node:path'
 import { randomBytes } from 'node:crypto'
@@ -39,6 +45,10 @@ function buildKey(cfg: Awaited<ReturnType<typeof getConfig>>, filename: string, 
   return parts.join('/')
 }
 
+function withPathPrefix(cfg: Awaited<ReturnType<typeof getConfig>>, key: string): string {
+  return [cfg.pathPrefix?.replace(/\/$/, ''), key.replace(/^\//, '')].filter(Boolean).join('/')
+}
+
 function buildStoredUrl(cfg: Awaited<ReturnType<typeof getConfig>>, key: string): string {
   if (!cfg.publicUrl) {
     throw new Error('R2 provider requires a public_url configured in Settings > Media.')
@@ -63,22 +73,47 @@ export const r2Provider: MediaProvider = {
     return { url: buildStoredUrl(cfg, key), key }
   },
 
-  async uploadRaw(buffer, exactKey, mimeType) {
+  async uploadRaw(buffer, key, mimeType) {
     const cfg = await getConfig()
     const client = buildClient(cfg)
+    const fullKey = withPathPrefix(cfg, key)
     await client.send(new PutObjectCommand({
       Bucket: cfg.bucket!,
-      Key: exactKey,
+      Key: fullKey,
       Body: buffer,
       ContentType: mimeType,
     }))
-    return { url: buildStoredUrl(cfg, exactKey), key: exactKey }
+    return { url: buildStoredUrl(cfg, fullKey), key: fullKey }
   },
 
   async delete(key) {
     const cfg = await getConfig()
     const client = buildClient(cfg)
     await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket!, Key: key }))
+  },
+
+  async deletePrefix(prefix) {
+    const cfg = await getConfig()
+    const client = buildClient(cfg)
+    const fullPrefix = prefix.endsWith('/') ? prefix : `${prefix}/`
+    let continuationToken: string | undefined
+    do {
+      const list = await client.send(new ListObjectsV2Command({
+        Bucket: cfg.bucket!,
+        Prefix: fullPrefix,
+        ContinuationToken: continuationToken,
+      }))
+      const objects = (list.Contents ?? [])
+        .map((o) => (o.Key ? { Key: o.Key } : null))
+        .filter((o): o is { Key: string } => o !== null)
+      if (objects.length > 0) {
+        await client.send(new DeleteObjectsCommand({
+          Bucket: cfg.bucket!,
+          Delete: { Objects: objects, Quiet: true },
+        }))
+      }
+      continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined
+    } while (continuationToken)
   },
 
   async getUrl(key) {

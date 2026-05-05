@@ -27,6 +27,28 @@ function buildDefaultAlt(filename: string): string {
   return withoutExtension || baseName.trim()
 }
 
+function mimeForHLSFile(filename: string): string | null {
+  const ext = filename.toLowerCase().split('.').pop()
+  switch (ext) {
+    case 'm3u8':
+      return 'application/vnd.apple.mpegurl'
+    case 'ts':
+      return 'video/mp2t'
+    case 'm4s':
+      return 'video/iso.segment'
+    case 'mp4':
+      return 'video/mp4'
+    case 'aac':
+      return 'audio/aac'
+    case 'vtt':
+      return 'text/vtt'
+    case 'key':
+      return 'application/octet-stream'
+    default:
+      return null
+  }
+}
+
 export async function listMedia(req: Request, res: Response): Promise<void> {
   const page = Math.max(1, parseInt(req.query.page as string) || 1)
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 24))
@@ -103,17 +125,24 @@ export async function uploadMedia(req: Request, res: Response): Promise<void> {
     const stripRoot = (path: string) =>
       rootDir && path.startsWith(`${rootDir}/`) ? path.slice(rootDir.length + 1) : path
 
-    await Promise.all(
-      files.map((file) => {
+    const m3u8Mime = mimeForHLSFile(m3u8File.originalname) ?? 'application/vnd.apple.mpegurl'
+
+    const uploaded = await Promise.all(
+      files.map(async (file) => {
         const relativePath = stripRoot(file.originalname)
-        const exactKey = `${prefix}/${relativePath}`
-        return provider.uploadRaw(file.buffer, exactKey, file.mimetype)
+        const relativeKey = `${prefix}/${relativePath}`
+        const mimeType = mimeForHLSFile(relativePath) ?? file.mimetype
+        const result = await provider.uploadRaw(file.buffer, relativeKey, mimeType)
+        return { file, result }
       }),
     )
 
-    const m3u8RelPath = stripRoot(m3u8File.originalname)
-    const m3u8Key = `${prefix}/${m3u8RelPath}`
-    const m3u8Url = await provider.getUrl(m3u8Key)
+    const m3u8 = uploaded.find((u) => u.file === m3u8File)?.result
+    if (!m3u8) {
+      res.status(500).json({ error: 'Failed to upload HLS playlist' })
+      return
+    }
+
     const id = createId()
     const filename = m3u8File.originalname.split('/').pop() ?? m3u8File.originalname
     const alt = buildDefaultAlt(filename)
@@ -121,21 +150,11 @@ export async function uploadMedia(req: Request, res: Response): Promise<void> {
     await pool.query(
       `INSERT INTO plank_media (id, filename, url, provider_key, mime_type, size, alt, folder_id, uploaded_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        id,
-        filename,
-        m3u8Url,
-        m3u8Key,
-        m3u8File.mimetype,
-        m3u8File.size,
-        alt,
-        folderId,
-        req.user!.id,
-      ],
+      [id, filename, m3u8.url, m3u8.key, m3u8Mime, m3u8File.size, alt, folderId, req.user!.id],
     )
     // HLS bundles are video — no image dimensions to store
 
-    res.status(201).json({ id, url: m3u8Url, filename, alt, caption: null })
+    res.status(201).json({ id, url: m3u8.url, filename, alt, caption: null })
     return
   }
 
@@ -185,7 +204,16 @@ export async function deleteMedia(req: Request, res: Response): Promise<void> {
   }
 
   const provider = await getProvider()
-  await provider.delete(rows[0].provider_key)
+  const key = rows[0].provider_key
+
+  if (key.toLowerCase().endsWith('.m3u8')) {
+    // HLS bundle — delete the entire bundle directory (playlist + segments)
+    const bundlePrefix = key.substring(0, key.lastIndexOf('/'))
+    await provider.deletePrefix(bundlePrefix)
+  } else {
+    await provider.delete(key)
+  }
+
   await pool.query('DELETE FROM plank_media WHERE id = $1', [id])
 
   res.status(204).end()
