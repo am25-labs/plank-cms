@@ -28,6 +28,13 @@ type FieldSelection = {
   include: Set<string> | null
   exclude: Set<string>
 }
+type FilterOperator = 'eq' | 'ne' | 'in' | 'nin'
+type ParsedFilter = {
+  field: FieldDefinition
+  operator: FilterOperator
+  rawValue: unknown
+  rawKey: string
+}
 
 type MediaValue = {
   id: string | null
@@ -69,11 +76,86 @@ const SYSTEM_RESPONSE_FIELDS = [
 ] as const
 
 function parseCsvParam(value: unknown): string[] {
-  if (typeof value !== 'string') return []
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean)
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => parseCsvParam(item))
+  }
+  return []
+}
+
+function coerceFilterValue(raw: string, field: FieldDefinition): unknown {
+  if (field.type === 'number') {
+    const parsed =
+      field.subtype === 'float' ? Number.parseFloat(raw) : Number.parseInt(raw, 10)
+    return Number.isNaN(parsed) ? raw : parsed
+  }
+  if (field.type === 'boolean') {
+    if (raw === 'true') return true
+    if (raw === 'false') return false
+  }
+  return raw
+}
+
+function coerceFilterValues(value: unknown, field: FieldDefinition): unknown[] {
+  return parseCsvParam(value).map((item) => coerceFilterValue(item, field))
+}
+
+function isFilterOperator(value: string): value is FilterOperator {
+  return value === 'eq' || value === 'ne' || value === 'in' || value === 'nin'
+}
+
+function parseFilters(
+  query: Record<string, unknown>,
+  fieldMap: Map<string, FieldDefinition>,
+): { filters: ParsedFilter[]; invalidFilters: string[] } {
+  const filters: ParsedFilter[] = []
+  const invalidFilters: string[] = []
+
+  const filtersObject =
+    query.filters && typeof query.filters === 'object' && !Array.isArray(query.filters)
+      ? (query.filters as Record<string, unknown>)
+      : null
+
+  if (filtersObject) {
+    for (const [fieldName, operatorValue] of Object.entries(filtersObject)) {
+      const field = fieldMap.get(fieldName)
+      if (!field || typeof operatorValue !== 'object' || operatorValue === null || Array.isArray(operatorValue)) {
+        invalidFilters.push(`filters.${fieldName}`)
+        continue
+      }
+      for (const [operatorKey, rawValue] of Object.entries(operatorValue as Record<string, unknown>)) {
+        if (!isFilterOperator(operatorKey)) {
+          invalidFilters.push(`filters.${fieldName}.${operatorKey}`)
+          continue
+        }
+        filters.push({
+          field,
+          operator: operatorKey,
+          rawValue,
+          rawKey: `filters[${fieldName}][${operatorKey}]`,
+        })
+      }
+    }
+  }
+
+  for (const [key, rawValue] of Object.entries(query)) {
+    const match = /^filters\[([^\]]+)\]\[([^\]]+)\]$/.exec(key)
+    if (!match) continue
+    const [, fieldName, operatorKey] = match
+    const field = fieldMap.get(fieldName)
+    if (!field || !isFilterOperator(operatorKey)) {
+      invalidFilters.push(key)
+      continue
+    }
+    filters.push({ field, operator: operatorKey, rawValue, rawKey: key })
+  }
+
+  return { filters, invalidFilters }
 }
 
 function parseFieldSelection(
@@ -506,9 +588,18 @@ export const listPublicEntries: SlugParam = async (req, res) => {
   const fallbacks = req.query.fallback ? String(req.query.fallback).split(',') : []
 
   const knownFields = new Set(ct.fields.map((f) => f.name))
+  const fieldMap = new Map(ct.fields.map((field) => [field.name, field]))
   const systemSortFields = new Set(['created_at', 'updated_at', 'published_at'])
   const filterClauses: string[] = []
   const filterValues: unknown[] = []
+  const { filters: parsedFilters, invalidFilters } = parseFilters(
+    req.query as Record<string, unknown>,
+    fieldMap,
+  )
+  if (invalidFilters.length > 0) {
+    res.status(400).json({ error: `Invalid filters: ${invalidFilters.join(', ')}` })
+    return
+  }
 
   // Status filter: default published, opt-in to draft or all
   const statusParam = String(req.query.status ?? 'published')
@@ -524,6 +615,39 @@ export const listPublicEntries: SlugParam = async (req, res) => {
   assertSafeIdentifier(sortField)
   const sortDir = String(req.query.order ?? 'desc').toLowerCase() === 'asc' ? 'ASC' : 'DESC'
 
+  for (const parsedFilter of parsedFilters) {
+    const fieldName = parsedFilter.field.name
+    assertSafeIdentifier(fieldName)
+
+    if (parsedFilter.operator === 'eq' || parsedFilter.operator === 'ne') {
+      const rawValue = Array.isArray(parsedFilter.rawValue)
+        ? parsedFilter.rawValue[0]
+        : parsedFilter.rawValue
+      const coercedValue =
+        typeof rawValue === 'string'
+          ? coerceFilterValue(rawValue, parsedFilter.field)
+          : rawValue
+      filterClauses.push(
+        `e.${fieldName} ${parsedFilter.operator === 'ne' ? '!=' : '='} $${filterValues.length + 1}`,
+      )
+      filterValues.push(coercedValue)
+      continue
+    }
+
+    const coercedValues = coerceFilterValues(parsedFilter.rawValue, parsedFilter.field)
+    if (coercedValues.length === 0) {
+      res.status(400).json({ error: `Filter "${parsedFilter.rawKey}" requires at least one value` })
+      return
+    }
+
+    filterClauses.push(
+      parsedFilter.operator === 'nin'
+        ? `NOT (e.${fieldName} = ANY($${filterValues.length + 1}))`
+        : `e.${fieldName} = ANY($${filterValues.length + 1})`,
+    )
+    filterValues.push(coercedValues)
+  }
+
   for (const [key, value] of Object.entries(req.query)) {
     if (
       key === 'page' ||
@@ -535,14 +659,13 @@ export const listPublicEntries: SlugParam = async (req, res) => {
       key === 'fallback' ||
       key === 'fields' ||
       key === 'select' ||
-      key === 'exclude'
+      key === 'exclude' ||
+      key === 'filters' ||
+      key.startsWith('filters[')
     )
       continue
-    if (knownFields.has(key)) {
-      assertSafeIdentifier(key)
-      filterClauses.push(`e.${key} = $${filterValues.length + 1}`)
-      filterValues.push(value)
-    }
+    if (knownFields.has(key)) continue
+    if (/_((?:n)?in|ne)$/.test(key)) continue
   }
 
   const where = filterClauses.length > 0 ? `WHERE ${filterClauses.join(' AND ')}` : ''
