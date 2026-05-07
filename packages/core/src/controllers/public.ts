@@ -260,30 +260,87 @@ function normalizeArrayItemsBySchema(value: unknown, field: FieldDefinition): un
   })
 }
 
+function collectMediaIdsFromValue(
+  field: FieldDefinition,
+  value: unknown,
+  idSet: Set<string>,
+): void {
+  if (field.type === 'media') {
+    if (typeof value === 'string' && value && !value.startsWith('http')) idSet.add(value)
+    return
+  }
+
+  if (field.type === 'media-gallery') {
+    if (!Array.isArray(value)) return
+    for (const item of value) {
+      if (typeof item === 'string' && item && !item.startsWith('http')) idSet.add(item)
+    }
+    return
+  }
+
+  if (field.type !== 'array' || !Array.isArray(value)) return
+
+  const subFields = field.arrayFields ?? []
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) continue
+    const raw = item as Record<string, unknown>
+    for (const subField of subFields) {
+      collectMediaIdsFromValue(subField as FieldDefinition, raw[subField.name], idSet)
+    }
+  }
+}
+
+function resolveMediaValue(
+  field: FieldDefinition,
+  value: unknown,
+  mediaMap: Map<string, MediaValue>,
+): unknown {
+  if (field.type === 'media') {
+    if (typeof value === 'string' && value.startsWith('http')) return createMediaValue(value)
+    if (typeof value === 'string' && mediaMap.has(value)) return mediaMap.get(value)
+    return value
+  }
+
+  if (field.type === 'media-gallery') {
+    if (!Array.isArray(value)) return value
+    return value.map((item) => {
+      if (typeof item === 'string' && item.startsWith('http')) return createMediaValue(item)
+      if (typeof item === 'string' && mediaMap.has(item)) return mediaMap.get(item)
+      return item
+    })
+  }
+
+  if (field.type !== 'array' || !Array.isArray(value)) return value
+
+  const subFields = field.arrayFields ?? []
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return item
+    const raw = item as Record<string, unknown>
+    const next: Record<string, unknown> = { ...raw }
+    for (const subField of subFields) {
+      if (!(subField.name in raw)) continue
+      next[subField.name] = resolveMediaValue(
+        subField as FieldDefinition,
+        raw[subField.name],
+        mediaMap,
+      )
+    }
+    return next
+  })
+}
+
 // Resolves media IDs to fresh URLs in-place across a list of serialized entries
 async function resolveMediaFields(
   entries: Record<string, unknown>[],
   ct: ContentType,
 ): Promise<void> {
-  const singleFields = ct.fields.filter((f) => f.type === 'media').map((f) => f.name)
-  const galleryFields = ct.fields.filter((f) => f.type === 'media-gallery').map((f) => f.name)
-  if (singleFields.length === 0 && galleryFields.length === 0) return
-
   const idSet = new Set<string>()
   for (const entry of entries) {
-    for (const name of singleFields) {
-      const val = entry[name]
-      if (typeof val === 'string' && val && !val.startsWith('http')) idSet.add(val)
-    }
-    for (const name of galleryFields) {
-      const val = entry[name]
-      if (Array.isArray(val)) {
-        for (const id of val) {
-          if (typeof id === 'string' && id && !id.startsWith('http')) idSet.add(id)
-        }
-      }
+    for (const field of ct.fields) {
+      collectMediaIdsFromValue(field, entry[field.name], idSet)
     }
   }
+
   const mediaMap = new Map<string, MediaValue>()
   if (idSet.size > 0) {
     const { rows } = await pool.query<{
@@ -315,23 +372,8 @@ async function resolveMediaFields(
   }
 
   for (const entry of entries) {
-    for (const name of singleFields) {
-      const val = entry[name]
-      if (typeof val === 'string' && val.startsWith('http')) {
-        entry[name] = createMediaValue(val)
-        continue
-      }
-      if (typeof val === 'string' && mediaMap.has(val)) entry[name] = mediaMap.get(val)
-    }
-    for (const name of galleryFields) {
-      const val = entry[name]
-      if (Array.isArray(val)) {
-        entry[name] = val.map((item) => {
-          if (typeof item === 'string' && item.startsWith('http')) return createMediaValue(item)
-          if (typeof item === 'string' && mediaMap.has(item)) return mediaMap.get(item)
-          return item
-        })
-      }
+    for (const field of ct.fields) {
+      entry[field.name] = resolveMediaValue(field, entry[field.name], mediaMap)
     }
   }
 }

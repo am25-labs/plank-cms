@@ -171,7 +171,9 @@ export function validate(
                 }
               } else if (subField.type === 'media') {
                 if (typeof subValue !== 'string' || !subValue.trim()) {
-                  errors.push(`Field "${field.name}[${i}].${subField.name}" must be a non-empty string URL`)
+                  errors.push(
+                    `Field "${field.name}[${i}].${subField.name}" must be a non-empty media reference string`,
+                  )
                 }
               } else if (subField.type === 'mixed') {
                 if (!isMixedArrayValue(subValue)) {
