@@ -13,8 +13,11 @@ import {
   ArrowLeftIcon,
   LayoutListIcon,
   PlusIcon,
+  PencilIcon,
   Trash2Icon,
   ListTreeIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog.tsx'
@@ -403,6 +406,7 @@ export function AddFieldDialog({
   const [config, setConfig] = useState<ConfigState>(EMPTY_CONFIG)
   const [nameError, setNameError] = useState('')
   const [subFieldDraft, setSubFieldDraft] = useState<ArraySubFieldDraft | null>(null)
+  const [editingSubFieldIndex, setEditingSubFieldIndex] = useState<number | null>(null)
   const [subFieldNameError, setSubFieldNameError] = useState('')
   const [arrayFieldsError, setArrayFieldsError] = useState('')
 
@@ -414,6 +418,7 @@ export function AddFieldDialog({
       setConfig(EMPTY_CONFIG)
       setNameError('')
       setSubFieldDraft(null)
+      setEditingSubFieldIndex(null)
       setSubFieldNameError('')
       setArrayFieldsError('')
     } else if (initialField) {
@@ -455,6 +460,7 @@ export function AddFieldDialog({
       setConfig(EMPTY_CONFIG)
       setNameError('')
       setSubFieldDraft(null)
+      setEditingSubFieldIndex(null)
       setSubFieldNameError('')
       setArrayFieldsError('')
     }
@@ -462,6 +468,7 @@ export function AddFieldDialog({
 
   function handleStartAddSubField() {
     setSubFieldDraft({ ...EMPTY_SUBFIELD_DRAFT })
+    setEditingSubFieldIndex(null)
     setSubFieldNameError('')
   }
 
@@ -498,7 +505,7 @@ export function AddFieldDialog({
       setSubFieldNameError('This name is reserved by SQL. Choose another one.')
       return
     }
-    if (config.arrayFields.some((f) => f.name === trimmed)) {
+    if (config.arrayFields.some((f, index) => f.name === trimmed && index !== editingSubFieldIndex)) {
       setSubFieldNameError('A sub-field with this name already exists')
       return
     }
@@ -513,13 +520,51 @@ export function AddFieldDialog({
           : undefined,
       width: subFieldDraft.width,
     }
-    setConfig((prev) => ({ ...prev, arrayFields: [...prev.arrayFields, newSubField] }))
+    setConfig((prev) => ({
+      ...prev,
+      arrayFields:
+        editingSubFieldIndex === null
+          ? [...prev.arrayFields, newSubField]
+          : prev.arrayFields.map((field, index) =>
+              index === editingSubFieldIndex ? newSubField : field,
+            ),
+    }))
     setSubFieldDraft(null)
+    setEditingSubFieldIndex(null)
     setSubFieldNameError('')
   }
 
   function handleRemoveSubField(name: string) {
+    if (subFieldDraft) return
     setConfig((prev) => ({ ...prev, arrayFields: prev.arrayFields.filter((f) => f.name !== name) }))
+  }
+
+  function handleEditSubField(index: number) {
+    if (subFieldDraft) return
+    const subField = config.arrayFields[index]
+    if (!subField) return
+    setSubFieldDraft({
+      type: subField.type,
+      subtype: subField.subtype,
+      name: subField.name,
+      required: Boolean(subField.required),
+      allowedTypes: subField.allowedTypes ?? [],
+      width: subField.width ?? SUBFIELD_DEFAULT_WIDTH[subField.type],
+    })
+    setEditingSubFieldIndex(index)
+    setSubFieldNameError('')
+  }
+
+  function handleMoveSubField(index: number, dir: -1 | 1) {
+    if (subFieldDraft) return
+    const swapIndex = index + dir
+    if (swapIndex < 0 || swapIndex >= config.arrayFields.length) return
+    setConfig((prev) => {
+      const next = [...prev.arrayFields]
+      ;[next[index], next[swapIndex]] = [next[swapIndex], next[index]]
+      return { ...prev, arrayFields: next }
+    })
+    setArrayFieldsError('')
   }
 
   function handleRenameSubField(index: number, name: string) {
@@ -765,8 +810,35 @@ export function AddFieldDialog({
                           </div>
                           <button
                             type="button"
+                            onClick={() => handleMoveSubField(index, -1)}
+                            disabled={Boolean(subFieldDraft) || index === 0}
+                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                          >
+                            <ChevronUpIcon className="size-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveSubField(index, 1)}
+                            disabled={
+                              Boolean(subFieldDraft) || index === config.arrayFields.length - 1
+                            }
+                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                          >
+                            <ChevronDownIcon className="size-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEditSubField(index)}
+                            disabled={Boolean(subFieldDraft)}
+                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
+                          >
+                            <PencilIcon className="size-3" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleRemoveSubField(sf.name)}
-                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:text-destructive"
+                            disabled={Boolean(subFieldDraft)}
+                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:text-destructive disabled:opacity-30"
                           >
                             <Trash2Icon className="size-3" />
                           </button>
@@ -829,6 +901,43 @@ export function AddFieldDialog({
                       )}
                     </div>
 
+                    {subFieldDraft.type === 'media' && (
+                      <div className="flex flex-col gap-2">
+                        <Label>Allowed file types</Label>
+                        <p className="text-xs text-muted-foreground -mt-1">
+                          Leave all unchecked to allow any file type.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {MEDIA_TYPE_OPTIONS.map(({ value, label }) => (
+                            <div key={value} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`array-media-type-${value}`}
+                                checked={subFieldDraft.allowedTypes.includes(value)}
+                                onCheckedChange={(checked) =>
+                                  setSubFieldDraft((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          allowedTypes: checked
+                                            ? [...prev.allowedTypes, value]
+                                            : prev.allowedTypes.filter((type) => type !== value),
+                                        }
+                                      : prev,
+                                  )
+                                }
+                              />
+                              <Label
+                                htmlFor={`array-media-type-${value}`}
+                                className="cursor-pointer font-normal"
+                              >
+                                {label}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5">
                         <Checkbox
@@ -853,13 +962,14 @@ export function AddFieldDialog({
                           size="sm"
                           onClick={() => {
                             setSubFieldDraft(null)
+                            setEditingSubFieldIndex(null)
                             setSubFieldNameError('')
                           }}
                         >
                           Cancel
                         </Button>
                         <Button size="sm" onClick={handleConfirmSubField}>
-                          Add
+                          {editingSubFieldIndex === null ? 'Add' : 'Save'}
                         </Button>
                       </div>
                     </div>
