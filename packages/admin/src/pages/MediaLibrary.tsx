@@ -14,6 +14,8 @@ import {
   PencilIcon,
   EllipsisIcon,
   SearchIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from 'lucide-react'
 import {
   Breadcrumb,
@@ -631,6 +633,15 @@ export function MediaLibrary() {
     setEditError(null)
   }
 
+  function stepPreview(direction: -1 | 1) {
+    if (!preview) return
+    const currentIndex = items.findIndex((item) => item.id === preview.id)
+    if (currentIndex === -1) return
+    const nextItem = items[currentIndex + direction]
+    if (!nextItem) return
+    openPreview(nextItem)
+  }
+
   function handleFilenameChange(nextFilename: string) {
     setEditFilename(nextFilename)
     const previousDefaultAlt = buildDefaultAlt(editFilename)
@@ -642,9 +653,28 @@ export function MediaLibrary() {
 
   const folders = folderData?.folders ?? []
   const items = mediaData?.items ?? []
+  const previewIndex = preview ? items.findIndex((item) => item.id === preview.id) : -1
+  const hasPreviousPreview = previewIndex > 0
+  const hasNextPreview = previewIndex !== -1 && previewIndex < items.length - 1
   const allKeys = [...folders.map((f) => `folder:${f.id}`), ...items.map((i) => i.id)]
-  const allSelected = allKeys.length > 0 && allKeys.every((k) => selected.has(k))
-  const someSelected = !allSelected && allKeys.some((k) => selected.has(k))
+
+  useEffect(() => {
+    if (!preview) return
+
+    function handlePreviewKeydown(event: KeyboardEvent) {
+      if (event.key === 'ArrowLeft' && hasPreviousPreview) {
+        event.preventDefault()
+        stepPreview(-1)
+      }
+      if (event.key === 'ArrowRight' && hasNextPreview) {
+        event.preventDefault()
+        stepPreview(1)
+      }
+    }
+
+    window.addEventListener('keydown', handlePreviewKeydown)
+    return () => window.removeEventListener('keydown', handlePreviewKeydown)
+  }, [preview, hasPreviousPreview, hasNextPreview, items])
 
   async function handleBulkDelete() {
     if (!canDeleteMedia) return
@@ -927,10 +957,32 @@ export function MediaLibrary() {
                   }
                 }}
               >
-                <div className="flex min-h-0 items-center justify-center overflow-hidden bg-muted/30 px-6 py-4">
+                <div className="relative flex min-h-0 items-center justify-center overflow-hidden bg-muted/30 px-6 py-4">
                   <div className="flex h-full w-full min-h-[280px] items-center justify-center overflow-hidden rounded-xl border bg-background/70 p-4">
                     <MediaPreviewContent item={preview} />
                   </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="absolute left-8 top-1/2 size-10 -translate-y-1/2 rounded-full shadow-sm"
+                    onClick={() => stepPreview(-1)}
+                    disabled={!hasPreviousPreview}
+                    aria-label="Previous file"
+                  >
+                    <ChevronLeftIcon className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="absolute right-8 top-1/2 size-10 -translate-y-1/2 rounded-full shadow-sm"
+                    onClick={() => stepPreview(1)}
+                    disabled={!hasNextPreview}
+                    aria-label="Next file"
+                  >
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
                 </div>
                 <div className="flex min-h-0 flex-col border-t lg:border-l lg:border-t-0">
                   <div className="grid grid-cols-2 gap-3 border-b px-6 py-4 text-xs text-muted-foreground">

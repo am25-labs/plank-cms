@@ -28,8 +28,10 @@ import {
   Trash2Icon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils.ts'
+import { Textarea } from '@/components/ui/textarea.tsx'
 
 export type ImageInsert = {
+  id?: string | null
   src: string
   filename?: string | null
   alt?: string | null
@@ -42,7 +44,7 @@ type RichTextEditorProps = {
   value: string
   onChange: (json: string) => void
   placeholder?: string
-  onInsertImage?: () => Promise<ImageInsert | null>
+  onInsertImage?: () => Promise<ImageInsert[] | null>
 }
 
 type ToolbarButtonProps = {
@@ -97,8 +99,24 @@ function getImageFilename(src: string): string {
   }
 }
 
-function RichTextImageCard({ node, deleteNode, selected }: NodeViewProps) {
+async function updateMediaCaption(mediaId: string, caption: string | null) {
+  const token = localStorage.getItem('plank_token')
+  const res = await fetch(`/cms/admin/media/${mediaId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ caption }),
+  })
+
+  if (!res.ok) throw new Error('Could not update media caption.')
+}
+
+function RichTextImageCard({ node, deleteNode, selected, updateAttributes, editor }: NodeViewProps) {
   const src = String(node.attrs.src ?? '')
+  const mediaId = typeof node.attrs.mediaId === 'string' ? node.attrs.mediaId : null
   const nodeFilename = typeof node.attrs.filename === 'string' ? node.attrs.filename : null
   const alt = typeof node.attrs.alt === 'string' ? node.attrs.alt : null
   const title = typeof node.attrs.title === 'string' ? node.attrs.title : null
@@ -106,6 +124,37 @@ function RichTextImageCard({ node, deleteNode, selected }: NodeViewProps) {
   const height = typeof node.attrs.height === 'number' ? node.attrs.height : null
   const filename = nodeFilename || getImageFilename(src)
   const dimensions = formatImageDimensions(width, height)
+  const [caption, setCaption] = useState(title ?? '')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  const editable = editor.isEditable
+
+  useEffect(() => {
+    setCaption(title ?? '')
+  }, [title])
+
+  async function handleCaptionBlur() {
+    const normalizedCaption = caption.trim() || null
+    const previousCaption = title?.trim() || null
+    if (normalizedCaption === previousCaption) {
+      setSaveError(null)
+      return
+    }
+
+    updateAttributes({ title: normalizedCaption })
+    setSaveError(null)
+
+    if (!mediaId) return
+
+    setIsSaving(true)
+    try {
+      await updateMediaCaption(mediaId, normalizedCaption)
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Could not update media caption.')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <NodeViewWrapper
@@ -129,11 +178,21 @@ function RichTextImageCard({ node, deleteNode, selected }: NodeViewProps) {
             {dimensions && <span>{dimensions}</span>}
             {alt && <span className="truncate" title={alt}>Alt: {alt}</span>}
           </div>
-          {title && (
-            <p className="line-clamp-2 text-xs text-muted-foreground" title={title}>
-              {title}
-            </p>
-          )}
+          <div className="space-y-1">
+            <Textarea
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              onBlur={handleCaptionBlur}
+              placeholder="Figcaption..."
+              disabled={!editable}
+              className="min-h-8 resize-none border-0 bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground shadow-none focus-visible:ring-1"
+            />
+            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span>{mediaId ? 'Synced with Media Library' : 'Local to this entry'}</span>
+              {isSaving && <span>Saving…</span>}
+            </div>
+            {saveError && <p className="text-[11px] text-destructive">{saveError}</p>}
+          </div>
         </div>
         <button
           type="button"
@@ -165,6 +224,7 @@ export function RichTextEditor({
         addAttributes() {
           return {
             ...this.parent?.(),
+            mediaId: { default: null },
             filename: { default: null },
             width: { default: null },
             height: { default: null },
@@ -212,20 +272,23 @@ export function RichTextEditor({
 
   async function handleInsertImage() {
     if (!editor || !onInsertImage) return
-    const img = await onInsertImage()
-    if (!img) return
-    editor
-      .chain()
-      .focus()
-      .setImage({
+    const images = await onInsertImage()
+    if (!images || images.length === 0) return
+
+    const content = images.map((img) => ({
+      type: 'image',
+      attrs: {
+        mediaId: img.id ?? undefined,
         src: img.src,
         filename: img.filename ?? undefined,
         alt: img.alt ?? undefined,
         title: img.title ?? undefined,
         width: img.width ?? undefined,
         height: img.height ?? undefined,
-      })
-      .run()
+      },
+    }))
+
+    editor.chain().focus().insertContent(content).run()
   }
 
   function handleSetLink() {

@@ -193,7 +193,7 @@ function MediaPickerDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
   allowedTypes?: FieldDef['allowedTypes']
-  onSelect: (item: MediaItem) => void
+  onSelect: (items: MediaItem[]) => void
 }) {
   const [breadcrumb, setBreadcrumb] = useState<PickerBreadcrumb[]>([{ id: null, name: 'Media' }])
   const currentFolderId = breadcrumb[breadcrumb.length - 1].id
@@ -205,6 +205,7 @@ function MediaPickerDialog({
   const [page, setPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [selectedItems, setSelectedItems] = useState<MediaItem[]>([])
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -263,6 +264,7 @@ function MediaPickerDialog({
       setPage(1)
       setSearchQuery('')
       setDebouncedSearch('')
+      setSelectedItems([])
     }
   }, [open])
 
@@ -272,6 +274,19 @@ function MediaPickerDialog({
 
   function navigateTo(index: number) {
     setBreadcrumb((prev) => prev.slice(0, index + 1))
+  }
+
+  function toggleItem(item: MediaItem) {
+    setSelectedItems((prev) => {
+      const exists = prev.some((selected) => selected.id === item.id)
+      if (exists) return prev.filter((selected) => selected.id !== item.id)
+      return [...prev, item]
+    })
+  }
+
+  function getSelectionOrder(itemId: string): number | null {
+    const index = selectedItems.findIndex((item) => item.id === itemId)
+    return index === -1 ? null : index + 1
   }
 
   const filtered = items.filter((item) => matchesAllowedTypes(item.mime_type, allowedTypes))
@@ -360,11 +375,11 @@ function MediaPickerDialog({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => {
-                      onSelect(item)
-                      onOpenChange(false)
-                    }}
-                    className="group relative overflow-hidden rounded-md border bg-card text-left transition-colors hover:border-primary"
+                    onClick={() => toggleItem(item)}
+                    className={cn(
+                      'group relative overflow-hidden rounded-md border bg-card text-left transition-colors hover:border-primary',
+                      getSelectionOrder(item.id) != null && 'border-primary ring-2 ring-primary/20',
+                    )}
                   >
                     <div className="aspect-square bg-muted">
                       {isImageMime(item.mime_type) ? (
@@ -388,7 +403,19 @@ function MediaPickerDialog({
                       </p>
                       <p className="text-[10px] text-muted-foreground">{formatBytes(item.size)}</p>
                     </div>
-                    <div className="absolute inset-0 rounded-md ring-2 ring-primary ring-offset-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                    <div
+                      className={cn(
+                        'absolute inset-0 rounded-md ring-2 ring-primary ring-offset-1 transition-opacity pointer-events-none',
+                        getSelectionOrder(item.id) != null
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100',
+                      )}
+                    />
+                    {getSelectionOrder(item.id) != null && (
+                      <div className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground shadow-sm">
+                        {getSelectionOrder(item.id)}
+                      </div>
+                    )}
                   </button>
                 ))}
               </div>
@@ -397,29 +424,62 @@ function MediaPickerDialog({
         )}
 
         {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-end gap-3 pt-2 border-t shrink-0">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none transition-colors"
-            >
-              Previous
-            </button>
-            <span className="text-xs text-muted-foreground">
-              {page} / {totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none transition-colors"
-            >
-              Next
-            </button>
+        <div className="flex items-center justify-between gap-3 border-t pt-2 shrink-0">
+          <div className="flex items-center gap-2">
+            {selectedItems.length > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">
+                  {selectedItems.length} selected
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => setSelectedItems([])}
+                >
+                  Clear
+                </Button>
+              </>
+            )}
           </div>
-        )}
+          <div className="flex items-center gap-3">
+            {totalPages > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-muted-foreground">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="text-sm text-muted-foreground hover:text-foreground disabled:opacity-40 disabled:pointer-events-none transition-colors"
+                >
+                  Next
+                </button>
+              </>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              disabled={selectedItems.length === 0}
+              onClick={() => {
+                onSelect(selectedItems)
+                onOpenChange(false)
+              }}
+            >
+              Insert selected
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   )
@@ -1723,20 +1783,20 @@ function RichTextInput({
   disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const resolveRef = useRef<((img: ImageInsert | null) => void) | null>(null)
+  const resolveRef = useRef<((img: ImageInsert[] | null) => void) | null>(null)
   const [insertOpen, setInsertOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
 
-  function onInsertImage(): Promise<ImageInsert | null> {
+  function onInsertImage(): Promise<ImageInsert[] | null> {
     setInsertOpen(true)
     return new Promise((resolve) => {
       resolveRef.current = resolve
     })
   }
 
-  function resolveWith(img: ImageInsert | null) {
+  function resolveWith(img: ImageInsert[] | null) {
     resolveRef.current?.(img)
     resolveRef.current = null
   }
@@ -1751,14 +1811,17 @@ function RichTextInput({
     setUploadError(null)
     try {
       const data = await uploadMediaFile(file)
-      resolveWith({
-        src: data.url,
-        filename: data.filename,
-        alt: data.alt,
-        title: data.caption,
-        width: data.width,
-        height: data.height,
-      })
+      resolveWith([
+        {
+          id: data.id,
+          src: data.url,
+          filename: data.filename,
+          alt: data.alt,
+          title: data.caption,
+          width: data.width,
+          height: data.height,
+        },
+      ])
       setInsertOpen(false)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed.')
@@ -1832,15 +1895,18 @@ function RichTextInput({
           setPickerOpen(open)
         }}
         allowedTypes={['image']}
-        onSelect={(item) => {
-          resolveWith({
-            src: item.url,
-            filename: item.filename,
-            alt: item.alt,
-            title: item.caption,
-            width: item.width,
-            height: item.height,
-          })
+        onSelect={(items) => {
+          resolveWith(
+            items.map((item) => ({
+              id: item.id,
+              src: item.url,
+              filename: item.filename,
+              alt: item.alt,
+              title: item.caption,
+              width: item.width,
+              height: item.height,
+            })),
+          )
           setPickerOpen(false)
           setInsertOpen(false)
         }}
