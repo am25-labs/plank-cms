@@ -188,11 +188,13 @@ function MediaPickerDialog({
   open,
   onOpenChange,
   allowedTypes,
+  selectionMode = 'single',
   onSelect,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   allowedTypes?: FieldDef['allowedTypes']
+  selectionMode?: 'single' | 'multiple'
   onSelect: (items: MediaItem[]) => void
 }) {
   const [breadcrumb, setBreadcrumb] = useState<PickerBreadcrumb[]>([{ id: null, name: 'Media' }])
@@ -277,6 +279,11 @@ function MediaPickerDialog({
   }
 
   function toggleItem(item: MediaItem) {
+    if (selectionMode === 'single') {
+      onSelect([item])
+      onOpenChange(false)
+      return
+    }
     setSelectedItems((prev) => {
       const exists = prev.some((selected) => selected.id === item.id)
       if (exists) return prev.filter((selected) => selected.id !== item.id)
@@ -411,7 +418,7 @@ function MediaPickerDialog({
                           : 'opacity-0 group-hover:opacity-100',
                       )}
                     />
-                    {getSelectionOrder(item.id) != null && (
+                    {selectionMode === 'multiple' && getSelectionOrder(item.id) != null && (
                       <div className="absolute right-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground shadow-sm">
                         {getSelectionOrder(item.id)}
                       </div>
@@ -426,7 +433,7 @@ function MediaPickerDialog({
         {/* Pagination */}
         <div className="flex items-center justify-between gap-3 border-t pt-2 shrink-0">
           <div className="flex items-center gap-2">
-            {selectedItems.length > 0 && (
+            {selectionMode === 'multiple' && selectedItems.length > 0 && (
               <>
                 <span className="text-xs text-muted-foreground">
                   {selectedItems.length} selected
@@ -467,17 +474,19 @@ function MediaPickerDialog({
                 </button>
               </>
             )}
-            <Button
-              type="button"
-              size="sm"
-              disabled={selectedItems.length === 0}
-              onClick={() => {
-                onSelect(selectedItems)
-                onOpenChange(false)
-              }}
-            >
-              Insert selected
-            </Button>
+            {selectionMode === 'multiple' && (
+              <Button
+                type="button"
+                size="sm"
+                disabled={selectedItems.length === 0}
+                onClick={() => {
+                  onSelect(selectedItems)
+                  onOpenChange(false)
+                }}
+              >
+                Insert selected
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
@@ -624,7 +633,10 @@ function MediaInput({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         allowedTypes={allowedTypes}
-        onSelect={(item) => {
+        selectionMode="single"
+        onSelect={(items) => {
+          const item = items[0]
+          if (!item) return
           setPreviewUrl(item.url)
           onChange(item.id)
         }}
@@ -855,12 +867,23 @@ function MediaGalleryInput({
         open={pickerOpen}
         onOpenChange={setPickerOpen}
         allowedTypes={['image']}
-        onSelect={(item) => {
-          if (!ids.includes(item.id)) {
-            setUrlCache((prev) => ({ ...prev, [item.id]: item.url }))
-            setNameCache((prev) => ({ ...prev, [item.id]: item.filename }))
-            onChange([...ids, item.id])
+        selectionMode="multiple"
+        onSelect={(items) => {
+          if (items.length === 0) return
+          const existing = new Set(ids)
+          const nextIds = [...ids]
+          const nextUrl: Record<string, string> = {}
+          const nextName: Record<string, string> = {}
+          for (const item of items) {
+            if (existing.has(item.id)) continue
+            existing.add(item.id)
+            nextIds.push(item.id)
+            nextUrl[item.id] = item.url
+            nextName[item.id] = item.filename
           }
+          if (Object.keys(nextUrl).length > 0) setUrlCache((prev) => ({ ...prev, ...nextUrl }))
+          if (Object.keys(nextName).length > 0) setNameCache((prev) => ({ ...prev, ...nextName }))
+          if (nextIds.length !== ids.length) onChange(nextIds)
         }}
       />
     </div>
@@ -1895,6 +1918,7 @@ function RichTextInput({
           setPickerOpen(open)
         }}
         allowedTypes={['image']}
+        selectionMode="multiple"
         onSelect={(items) => {
           resolveWith(
             items.map((item) => ({
