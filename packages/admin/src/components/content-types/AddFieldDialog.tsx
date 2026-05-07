@@ -567,14 +567,6 @@ export function AddFieldDialog({
     setArrayFieldsError('')
   }
 
-  function handleRenameSubField(index: number, name: string) {
-    setConfig((prev) => ({
-      ...prev,
-      arrayFields: prev.arrayFields.map((f, i) => (i === index ? { ...f, name } : f)),
-    }))
-    setArrayFieldsError('')
-  }
-
   function validateArraySubFields() {
     const trimmedNames = config.arrayFields.map((f) => f.name.trim())
     if (trimmedNames.some((name) => !name)) {
@@ -791,57 +783,67 @@ export function AddFieldDialog({
                       return (
                         <div
                           key={`subfield-${index}`}
-                          className={`${FIELD_WIDTH_SPAN[sf.width ?? 'full']} flex items-center gap-1.5 rounded-md border border-dashed border-border p-2`}
+                          className={`${FIELD_WIDTH_SPAN[sf.width ?? 'full']} rounded-md border border-dashed border-border p-2`}
                         >
-                          <div
-                            className={`flex size-5 shrink-0 items-center justify-center rounded ${opt?.bg ?? 'bg-muted'}`}
-                          >
-                            <SfIcon className={`size-3 ${opt?.color ?? 'text-muted-foreground'}`} />
+                          <div className="flex items-start gap-1.5">
+                            <div
+                              className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded ${opt?.bg ?? 'bg-muted'}`}
+                            >
+                              <SfIcon
+                                className={`size-3 ${opt?.color ?? 'text-muted-foreground'}`}
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-medium">
+                                {sf.name}
+                                {sf.required && <span className="ml-0.5 text-destructive">*</span>}
+                              </p>
+                              <p className="truncate text-[10px] text-muted-foreground">
+                                {opt?.label}
+                              </p>
+                            </div>
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <Input
-                              value={sf.name}
-                              onChange={(e) => handleRenameSubField(index, e.target.value)}
-                              className="h-6 px-1.5 text-xs"
-                            />
-                            <p className="truncate text-[10px] text-muted-foreground">
-                              {opt?.label}
-                            </p>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-1">
+                            <button
+                              type="button"
+                              title="Move up"
+                              onClick={() => handleMoveSubField(index, -1)}
+                              disabled={Boolean(subFieldDraft) || index === 0}
+                              className="flex size-6 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent disabled:opacity-30"
+                            >
+                              <ChevronUpIcon className="size-3" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Move down"
+                              onClick={() => handleMoveSubField(index, 1)}
+                              disabled={
+                                Boolean(subFieldDraft) || index === config.arrayFields.length - 1
+                              }
+                              className="flex size-6 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent disabled:opacity-30"
+                            >
+                              <ChevronDownIcon className="size-3" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Edit sub-field"
+                              onClick={() => handleEditSubField(index)}
+                              disabled={Boolean(subFieldDraft)}
+                              className="flex size-6 items-center justify-center rounded border border-border text-muted-foreground hover:bg-accent disabled:opacity-30"
+                            >
+                              <PencilIcon className="size-3" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Delete sub-field"
+                              onClick={() => handleRemoveSubField(sf.name)}
+                              disabled={Boolean(subFieldDraft)}
+                              className="flex size-6 items-center justify-center rounded border border-border text-muted-foreground hover:text-destructive disabled:opacity-30"
+                            >
+                              <Trash2Icon className="size-3" />
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleMoveSubField(index, -1)}
-                            disabled={Boolean(subFieldDraft) || index === 0}
-                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
-                          >
-                            <ChevronUpIcon className="size-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMoveSubField(index, 1)}
-                            disabled={
-                              Boolean(subFieldDraft) || index === config.arrayFields.length - 1
-                            }
-                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
-                          >
-                            <ChevronDownIcon className="size-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleEditSubField(index)}
-                            disabled={Boolean(subFieldDraft)}
-                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent disabled:opacity-30"
-                          >
-                            <PencilIcon className="size-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveSubField(sf.name)}
-                            disabled={Boolean(subFieldDraft)}
-                            className="flex shrink-0 size-5 items-center justify-center rounded text-muted-foreground hover:text-destructive disabled:opacity-30"
-                          >
-                            <Trash2Icon className="size-3" />
-                          </button>
                         </div>
                       )
                     })}
