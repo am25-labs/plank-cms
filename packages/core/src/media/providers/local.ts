@@ -1,4 +1,4 @@
-import { writeFile, mkdir, rm } from 'node:fs/promises'
+import { writeFile, mkdir, rename, rm } from 'node:fs/promises'
 import { join, extname } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { getSetting } from '../../lib/settings.js'
@@ -47,6 +47,18 @@ export const localProvider: MediaProvider = {
   async deletePrefix(prefix) {
     const dir = await uploadsDir()
     await rm(join(dir, prefix), { recursive: true, force: true })
+  },
+
+  async move(key, nextKey) {
+    const dir = await uploadsDir()
+    await mkdir(join(dir, nextKey.split('/').slice(0, -1).join('/')), { recursive: true })
+    await rename(join(dir, key), join(dir, nextKey))
+  },
+
+  async movePrefix(prefix, nextPrefix) {
+    const dir = await uploadsDir()
+    await mkdir(join(dir, nextPrefix.split('/').slice(0, -1).join('/')), { recursive: true })
+    await rename(join(dir, prefix), join(dir, nextPrefix))
   },
 
   async getUrl(key) {

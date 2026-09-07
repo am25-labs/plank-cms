@@ -24,6 +24,13 @@ import { Checkbox } from '@/shared/ui/checkbox.tsx'
 import { Spinner } from '@/shared/ui/spinner.tsx'
 import { Input } from '@/shared/ui/input.tsx'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select.tsx'
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -44,6 +51,41 @@ import { MediaCard } from './components/MediaCard.tsx'
 import { MediaPreviewDialog } from './components/MediaPreviewDialog.tsx'
 import { buildDefaultAlt, readFSEntry } from './lib/media.ts'
 import type { BreadcrumbEntry, Folder, FolderList, MediaItem, MediaList } from './types.ts'
+
+const ROOT_FOLDER_ID = '__root__'
+
+type MoveTarget =
+  | { type: 'folder'; item: Folder }
+  | { type: 'media'; item: MediaItem }
+
+function getFolderPath(folder: Folder, folders: Folder[]): string {
+  const byId = new Map(folders.map((item) => [item.id, item]))
+  const names: string[] = []
+  const visited = new Set<string>()
+  let current: Folder | undefined = folder
+
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id)
+    names.unshift(current.name)
+    current = current.parent_id ? byId.get(current.parent_id) : undefined
+  }
+
+  return names.join(' / ')
+}
+
+function isDescendant(folderId: string, ancestorId: string, folders: Folder[]): boolean {
+  const byId = new Map(folders.map((folder) => [folder.id, folder]))
+  const visited = new Set<string>()
+  let current = byId.get(folderId)
+
+  while (current?.parent_id && !visited.has(current.parent_id)) {
+    if (current.parent_id === ancestorId) return true
+    visited.add(current.parent_id)
+    current = byId.get(current.parent_id)
+  }
+
+  return false
+}
 
 export function MediaLibrary() {
   const { timezone } = useSettings()
@@ -80,6 +122,9 @@ export function MediaLibrary() {
     loading: foldersLoading,
     refetch: refetchFolders,
   } = useFetch<FolderList>(`/cms/admin/folders?parent_id=${currentFolderId ?? ''}`)
+  const { data: allFolderData, refetch: refetchAllFolders } = useFetch<FolderList>(
+    '/cms/admin/folders?all=true',
+  )
   const {
     data: mediaData,
     loading: mediaLoading,
@@ -91,7 +136,8 @@ export function MediaLibrary() {
   const refetch = useCallback(() => {
     refetchFolders()
     refetchMedia()
-  }, [refetchFolders, refetchMedia])
+    refetchAllFolders()
+  }, [refetchFolders, refetchMedia, refetchAllFolders])
 
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
@@ -110,6 +156,11 @@ export function MediaLibrary() {
   const [newFolderName, setNewFolderName] = useState('')
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false)
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null)
+  const [moveDestinationId, setMoveDestinationId] = useState(ROOT_FOLDER_ID)
+  const [moving, setMoving] = useState(false)
+  const [dragTarget, setDragTarget] = useState<MoveTarget | null>(null)
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null)
 
   const { loading: deleting, error: deleteError, request } = useApi()
   const { loading: folderSaving, error: folderSaveError, request: folderRequest } = useApi<Folder>()
@@ -274,6 +325,63 @@ export function MediaLibrary() {
     }
   }
 
+  function openMove(target: MoveTarget) {
+    setMoveTarget(target)
+    setMoveDestinationId(
+      target.type === 'folder'
+        ? target.item.parent_id ?? ROOT_FOLDER_ID
+        : target.item.folder_id ?? ROOT_FOLDER_ID,
+    )
+  }
+
+  async function moveItem(target: MoveTarget, destinationId: string | null) {
+    if (!canWriteMedia) return
+    const currentFolderId = target.type === 'folder' ? target.item.parent_id : target.item.folder_id
+    if ((currentFolderId ?? null) === destinationId) return
+
+    setMoving(true)
+    try {
+      const response = await fetch(
+        target.type === 'folder'
+          ? `/cms/admin/folders/${target.item.id}`
+          : `/cms/admin/media/${target.item.id}`,
+        {
+          method: 'PATCH',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            target.type === 'folder' ? { parent_id: destinationId } : { folder_id: destinationId },
+          ),
+        },
+      )
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as { error?: string } | null
+        throw new Error(body?.error ?? 'Could not move item')
+      }
+      setMoveTarget(null)
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete(target.type === 'folder' ? `folder:${target.item.id}` : target.item.id)
+        return next
+      })
+      refetch()
+      toast.success(target.type === 'folder' ? 'Folder moved' : 'File moved')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not move item')
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  function handleMoveDrop(destinationId: string) {
+    if (!dragTarget) return
+    if (dragTarget.type === 'folder' && dragTarget.item.id === destinationId) return
+    setDropTargetId(null)
+    const target = dragTarget
+    setDragTarget(null)
+    void moveItem(target, destinationId)
+  }
+
   // Selection
 
   function toggleOne(key: string) {
@@ -342,6 +450,7 @@ export function MediaLibrary() {
   }
 
   const folders = folderData?.folders ?? []
+  const allFolders = allFolderData?.folders ?? []
   const items = mediaData?.items ?? []
   const previewIndex = preview ? items.findIndex((item) => item.id === preview.id) : -1
   const hasPreviousPreview = previewIndex > 0
@@ -553,10 +662,20 @@ export function MediaLibrary() {
                       setFolderToRename(f)
                       setRenameValue(f.name)
                     }}
+                    onMove={(folder) => openMove({ type: 'folder', item: folder })}
                     canDelete={canDeleteMedia}
                     canRename={canWriteMedia}
+                    canMove={canWriteMedia}
                     selected={selected.has(`folder:${folder.id}`)}
                     onToggle={toggleOne}
+                    onDragStart={(folder) => setDragTarget({ type: 'folder', item: folder })}
+                    onDragEnd={() => {
+                      setDragTarget(null)
+                      setDropTargetId(null)
+                    }}
+                    onDrop={handleMoveDrop}
+                    onDropOver={setDropTargetId}
+                    isDropTarget={dropTargetId === folder.id}
                   />
                 ))}
               </div>
@@ -569,9 +688,16 @@ export function MediaLibrary() {
                     item={item}
                     onDelete={setToDelete}
                     onPreview={openPreview}
+                    onMove={(item) => openMove({ type: 'media', item })}
                     canDelete={canDeleteMedia}
+                    canWrite={canWriteMedia}
                     selected={selected.has(item.id)}
                     onToggle={toggleOne}
+                    onDragStart={(item) => setDragTarget({ type: 'media', item })}
+                    onDragEnd={() => {
+                      setDragTarget(null)
+                      setDropTargetId(null)
+                    }}
                   />
                 ))}
               </div>
@@ -696,6 +822,63 @@ export function MediaLibrary() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {moveTarget && (
+          <Dialog open onOpenChange={(open) => !open && setMoveTarget(null)}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>{moveTarget.type === 'folder' ? 'Move folder' : 'Move file'}</DialogTitle>
+              </DialogHeader>
+              <p
+                className="truncate text-sm text-muted-foreground"
+                title={moveTarget.type === 'folder' ? moveTarget.item.name : moveTarget.item.filename}
+              >
+                {moveTarget.type === 'folder' ? moveTarget.item.name : moveTarget.item.filename}
+              </p>
+              <Select value={moveDestinationId} onValueChange={setMoveDestinationId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select destination" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ROOT_FOLDER_ID}>Media</SelectItem>
+                  {allFolders
+                    .filter(
+                      (folder) =>
+                        moveTarget.type !== 'folder' ||
+                        (folder.id !== moveTarget.item.id &&
+                          !isDescendant(folder.id, moveTarget.item.id, allFolders)),
+                    )
+                    .map((folder) => (
+                      <SelectItem key={folder.id} value={folder.id}>
+                        {getFolderPath(folder, allFolders)}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setMoveTarget(null)} disabled={moving}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() =>
+                    void moveItem(
+                      moveTarget,
+                      moveDestinationId === ROOT_FOLDER_ID ? null : moveDestinationId,
+                    )
+                  }
+                  disabled={
+                    moving ||
+                    (moveTarget.type === 'folder'
+                      ? moveTarget.item.parent_id ?? ROOT_FOLDER_ID
+                      : moveTarget.item.folder_id ?? ROOT_FOLDER_ID) === moveDestinationId
+                  }
+                >
+                  {moving ? 'Moving…' : 'Move'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
 
         {/* Delete media */}
         <Dialog

@@ -19,6 +19,8 @@ export interface MediaProvider {
   uploadRaw(buffer: Buffer, key: string, mimeType: string): Promise<{ url: string; key: string }>
   delete(key: string): Promise<void>
   deletePrefix(prefix: string): Promise<void>
+  move(key: string, nextKey: string): Promise<void>
+  movePrefix(prefix: string, nextPrefix: string): Promise<void>
   getUrl(key: string): Promise<string>
   presign?(filename: string, mimeType: string, options?: UploadOptions): Promise<PresignResult>
 }

@@ -1,6 +1,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  CopyObjectCommand,
   DeleteObjectCommand,
   ListObjectsV2Command,
   DeleteObjectsCommand,
@@ -107,6 +108,52 @@ export const s3Provider: MediaProvider = {
           Bucket: cfg.bucket!,
           Delete: { Objects: objects, Quiet: true },
         }))
+      }
+      continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined
+    } while (continuationToken)
+  },
+
+  async move(key, nextKey) {
+    const cfg = await getConfig()
+    const client = buildClient(cfg)
+    await client.send(
+      new CopyObjectCommand({ Bucket: cfg.bucket!, CopySource: `${cfg.bucket}/${key}`, Key: nextKey }),
+    )
+    await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket!, Key: key }))
+  },
+
+  async movePrefix(prefix, nextPrefix) {
+    const cfg = await getConfig()
+    const client = buildClient(cfg)
+    const sourcePrefix = prefix.endsWith('/') ? prefix : `${prefix}/`
+    let continuationToken: string | undefined
+    do {
+      const list = await client.send(
+        new ListObjectsV2Command({
+          Bucket: cfg.bucket!,
+          Prefix: sourcePrefix,
+          ContinuationToken: continuationToken,
+        }),
+      )
+      const keys = (list.Contents ?? []).flatMap((item) => (item.Key ? [item.Key] : []))
+      await Promise.all(
+        keys.map((key) =>
+          client.send(
+            new CopyObjectCommand({
+              Bucket: cfg.bucket!,
+              CopySource: `${cfg.bucket}/${key}`,
+              Key: `${nextPrefix}${key.slice(sourcePrefix.length)}`,
+            }),
+          ),
+        ),
+      )
+      if (keys.length > 0) {
+        await client.send(
+          new DeleteObjectsCommand({
+            Bucket: cfg.bucket!,
+            Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+          }),
+        )
       }
       continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined
     } while (continuationToken)

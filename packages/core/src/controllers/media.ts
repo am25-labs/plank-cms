@@ -2,8 +2,7 @@ import type { Request, Response } from 'express'
 import { randomBytes } from 'node:crypto'
 import { pool, createId } from '@plank-cms/db'
 import { getProvider } from '../media/index.js'
-
-const MEDIA_PREFIX = 'media'
+import { getMediaFolderPrefix, moveMediaBundleKey, moveMediaKey } from '../media/paths.js'
 
 type MediaRow = {
   id: string
@@ -117,7 +116,7 @@ export async function uploadMedia(req: Request, res: Response): Promise<void> {
     }
 
     const bundleId = randomBytes(8).toString('hex')
-    const prefix = [MEDIA_PREFIX, folderId, bundleId].filter(Boolean).join('/')
+    const prefix = `${await getMediaFolderPrefix(folderId)}/${bundleId}`
 
     // Strip the common root folder from relative paths (webkitRelativePath includes the folder name)
     const rootDir = m3u8File.originalname.includes('/') ? m3u8File.originalname.split('/')[0] : null
@@ -161,7 +160,7 @@ export async function uploadMedia(req: Request, res: Response): Promise<void> {
   // Regular single-file upload (local provider only — S3/R2 use presign + confirm)
   const file = files[0]
   const { url, key } = await provider.upload(file, {
-    prefix: folderId ? `${MEDIA_PREFIX}/${folderId}` : MEDIA_PREFIX,
+    prefix: await getMediaFolderPrefix(folderId),
   })
   const id = createId()
   const width = req.body.width ? parseInt(req.body.width as string) : null
@@ -245,7 +244,7 @@ export async function presignMedia(req: Request, res: Response): Promise<void> {
     }
   }
 
-  const prefix = folderId ? `${MEDIA_PREFIX}/${folderId}` : MEDIA_PREFIX
+  const prefix = await getMediaFolderPrefix(folderId ?? null)
   const result = await provider.presign(filename, mimeType, { prefix })
   res.json({ mode: 'presigned', ...result })
 }
@@ -296,14 +295,16 @@ export async function confirmMedia(req: Request, res: Response): Promise<void> {
 
 export async function updateMedia(req: Request, res: Response): Promise<void> {
   const { id } = req.params
-  const { filename, alt, caption } = req.body as {
+  const { filename, alt, caption, folder_id } = req.body as {
     filename?: string
     alt?: string | null
     caption?: string | null
+    folder_id?: string | null
   }
 
   const updates: string[] = []
   const values: unknown[] = []
+  const movingFolder = Object.prototype.hasOwnProperty.call(req.body, 'folder_id')
 
   if (typeof filename === 'string' && filename.trim()) {
     values.push(filename.trim())
@@ -316,6 +317,53 @@ export async function updateMedia(req: Request, res: Response): Promise<void> {
   if (caption !== undefined) {
     values.push(typeof caption === 'string' ? caption.trim() || null : null)
     updates.push(`caption = $${values.length}`)
+  }
+  if (movingFolder) {
+    if (folder_id) {
+      const { rows: folderRows } = await pool.query('SELECT id FROM plank_folders WHERE id = $1', [
+        folder_id,
+      ])
+      if (!folderRows[0]) {
+        res.status(404).json({ error: 'Folder not found' })
+        return
+      }
+    }
+    values.push(folder_id ?? null)
+    updates.push(`folder_id = $${values.length}`)
+
+    const { rows: mediaRows } = await pool.query<MediaRow>(
+      'SELECT * FROM plank_media WHERE id = $1',
+      [id],
+    )
+    if (!mediaRows[0]) {
+      res.status(404).json({ error: 'Media not found' })
+      return
+    }
+
+    const provider = await getProvider()
+    const prefix = await getMediaFolderPrefix(folder_id ?? null)
+    const current = mediaRows[0]
+    const isBundle = current.provider_key.toLowerCase().endsWith('.m3u8')
+    const next = isBundle
+      ? moveMediaBundleKey(current.provider_key, prefix)
+      : { key: moveMediaKey(current.provider_key, prefix) }
+
+    if (current.provider_key !== next.key) {
+      if (isBundle) {
+        const bundle = next as ReturnType<typeof moveMediaBundleKey>
+        await provider.movePrefix(
+          current.provider_key.substring(0, current.provider_key.lastIndexOf('/')),
+          bundle.prefix,
+        )
+      } else {
+        await provider.move(current.provider_key, next.key)
+      }
+    }
+
+    values.push(next.key)
+    updates.push(`provider_key = $${values.length}`)
+    values.push(await provider.getUrl(next.key))
+    updates.push(`url = $${values.length}`)
   }
 
   if (updates.length === 0) {
