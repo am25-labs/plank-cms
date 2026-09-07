@@ -22,7 +22,7 @@ import type {
 
 export function Dashboard() {
   const navigate = useNavigate()
-  const { timezone } = useSettings()
+  const { timezone, defaultLocale } = useSettings()
   const { user } = useAuth()
   const { data: contentTypes } = useFetch<ContentType[]>('/cms/admin/content-types')
   const [recent, setRecent] = useState<RecentEntry[]>([])
@@ -148,7 +148,7 @@ export function Dashboard() {
     Promise.all(
       collectionTypes.map(async (ct) => {
         const res = await fetch(
-          `/cms/admin/content-types/${ct.slug}/entries?page=1&limit=50&sort=published_at&order=desc`,
+          `/cms/admin/content-types/${ct.slug}/entries?page=1&limit=50&sort=published_at&order=desc&displayLocale=${encodeURIComponent(defaultLocale)}`,
           { credentials: 'include', signal: controller.signal },
         )
         if (!res.ok) return [] as RecentEntry[]
@@ -181,7 +181,7 @@ export function Dashboard() {
       .finally(() => setLoadingRecent(false))
 
     return () => controller.abort()
-  }, [canReadEntries, collectionTypes])
+  }, [canReadEntries, collectionTypes, defaultLocale])
 
   useEffect(() => {
     if (!canReadEntries || collectionTypes.length === 0 || !user?.id) {
@@ -195,7 +195,7 @@ export function Dashboard() {
     Promise.all(
       collectionTypes.map(async (ct) => {
         const res = await fetch(
-          `/cms/admin/content-types/${ct.slug}/entries?page=1&limit=50&status=draft&sort=updated_at&order=desc`,
+          `/cms/admin/content-types/${ct.slug}/entries?page=1&limit=50&status=draft&sort=updated_at&order=desc&displayLocale=${encodeURIComponent(defaultLocale)}`,
           { credentials: 'include', signal: controller.signal },
         )
         if (!res.ok) return [] as RecentEntry[]
@@ -228,7 +228,7 @@ export function Dashboard() {
       .finally(() => setLoadingMyDrafts(false))
 
     return () => controller.abort()
-  }, [canReadEntries, collectionTypes, user?.id])
+  }, [canReadEntries, collectionTypes, user?.id, defaultLocale])
 
   return (
     <div>

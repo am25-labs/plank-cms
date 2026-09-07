@@ -8,6 +8,7 @@ type LocalizationControlsProps = {
   activeLocale: string
   onActiveLocaleChange: (locale: string) => void
   locales: string[]
+  defaultLocale: string
 }
 
 export function LocalizationControls({
@@ -17,7 +18,14 @@ export function LocalizationControls({
   activeLocale,
   onActiveLocaleChange,
   locales,
+  defaultLocale,
 }: LocalizationControlsProps) {
+  const orderedLocales = [...new Set([defaultLocale, ...locales])].sort((left, right) => {
+    if (left === defaultLocale) return -1
+    if (right === defaultLocale) return 1
+    return left.localeCompare(right)
+  })
+
   return (
     <div className="mb-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -38,7 +46,7 @@ export function LocalizationControls({
         {localizationEnabled && (
           <Tabs value={activeLocale} onValueChange={onActiveLocaleChange}>
             <TabsList>
-              {locales.map((locale) => (
+              {orderedLocales.map((locale) => (
                 <TabsTrigger key={locale} value={locale} disabled={readOnly}>
                   {locale.toUpperCase()}
                 </TabsTrigger>

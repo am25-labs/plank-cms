@@ -1178,10 +1178,16 @@ type EntriesResponse = {
   limit: number
 }
 
-function fetchEntriesPage(slug: string, page: number, limit: number): Promise<EntriesResponse> {
-  return fetch(`/cms/admin/content-types/${slug}/entries?page=${page}&limit=${limit}`, {
-    credentials: 'include',
-  })
+function fetchEntriesPage(
+  slug: string,
+  page: number,
+  limit: number,
+  displayLocale: string,
+): Promise<EntriesResponse> {
+  return fetch(
+    `/cms/admin/content-types/${slug}/entries?page=${page}&limit=${limit}&displayLocale=${encodeURIComponent(displayLocale)}`,
+    { credentials: 'include' },
+  )
     .then((r) =>
       r.ok
         ? (r.json() as Promise<EntriesResponse>)
@@ -1190,9 +1196,12 @@ function fetchEntriesPage(slug: string, page: number, limit: number): Promise<En
     .catch(() => ({ data: [], total: 0, page, limit }))
 }
 
-async function fetchEntries(slug: string): Promise<{ data: Record<string, unknown>[] }> {
+async function fetchEntries(
+  slug: string,
+  displayLocale: string,
+): Promise<{ data: Record<string, unknown>[] }> {
   const limit = 100
-  const firstPage = await fetchEntriesPage(slug, 1, limit)
+  const firstPage = await fetchEntriesPage(slug, 1, limit, displayLocale)
   const totalPages = Math.max(1, Math.ceil(firstPage.total / limit))
 
   if (totalPages === 1) {
@@ -1200,7 +1209,9 @@ async function fetchEntries(slug: string): Promise<{ data: Record<string, unknow
   }
 
   const remainingPages = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, index) => fetchEntriesPage(slug, index + 2, limit)),
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchEntriesPage(slug, index + 2, limit, displayLocale),
+    ),
   )
 
   return {
@@ -1210,6 +1221,7 @@ async function fetchEntries(slug: string): Promise<{ data: Record<string, unknow
 
 // For M:1, 1:1, M:M — fetch all entries from the related CT for selection
 function useRelationEntries(relatedTable: string) {
+  const { defaultLocale } = useSettings()
   const [entries, setEntries] = useState<RelationEntry[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -1222,7 +1234,7 @@ function useRelationEntries(relatedTable: string) {
         (list): Promise<{ ctDef: CTSummary | null; res: { data: Record<string, unknown>[] } }> => {
           const ct = resolveByTable(list, relatedTable)
           if (!ct) return Promise.resolve({ ctDef: null, res: { data: [] } })
-          return fetchEntries(ct.slug).then((res) => ({ ctDef: ct, res }))
+          return fetchEntries(ct.slug, defaultLocale).then((res) => ({ ctDef: ct, res }))
         },
       )
       .then(({ ctDef, res }) => {
@@ -1238,13 +1250,14 @@ function useRelationEntries(relatedTable: string) {
       })
       .catch(() => setEntries([]))
       .finally(() => setLoading(false))
-  }, [relatedTable])
+  }, [relatedTable, defaultLocale])
 
   return { entries, loading }
 }
 
 // For 1:M — fetch entries from the related CT filtered by the FK field pointing back here
 function useLinkedEntries(relatedTable: string, relatedField: string, currentId: string) {
+  const { defaultLocale } = useSettings()
   const [entries, setEntries] = useState<RelationEntry[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -1260,7 +1273,7 @@ function useLinkedEntries(relatedTable: string, relatedField: string, currentId:
         (list): Promise<{ ctDef: CTSummary | null; res: { data: Record<string, unknown>[] } }> => {
           const ct = resolveByTable(list, relatedTable)
           if (!ct) return Promise.resolve({ ctDef: null, res: { data: [] } })
-          return fetchEntries(ct.slug).then((res) => ({ ctDef: ct, res }))
+          return fetchEntries(ct.slug, defaultLocale).then((res) => ({ ctDef: ct, res }))
         },
       )
       .then(({ ctDef, res }) => {
@@ -1277,7 +1290,7 @@ function useLinkedEntries(relatedTable: string, relatedField: string, currentId:
       })
       .catch(() => setEntries([]))
       .finally(() => setLoading(false))
-  }, [relatedTable, relatedField, currentId])
+  }, [relatedTable, relatedField, currentId, defaultLocale])
 
   return { entries, loading }
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSettings } from '@/shared/context/settings.tsx'
 import { normalizeRelationIds, pickRelationDisplayField } from '../lib/entriesList.ts'
 import type { RelationContentType } from '../types.ts'
 
@@ -13,6 +14,7 @@ export function RelationValueCell({
   value,
   displayField,
 }: RelationValueCellProps) {
+  const { defaultLocale } = useSettings()
   const [labels, setLabels] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -40,7 +42,10 @@ export function RelationValueCell({
       .then((resolvedDisplayField) =>
         Promise.all(
           nextIds.map((id) =>
-            fetch(`/cms/admin/entries/${relatedSlug}/${id}`, { credentials: 'include' })
+            fetch(
+              `/cms/admin/entries/${relatedSlug}/${id}?displayLocale=${encodeURIComponent(defaultLocale)}`,
+              { credentials: 'include' },
+            )
               .then((r) => (r.ok ? (r.json() as Promise<Record<string, unknown>>) : null))
               .then((entry) => {
                 if (!entry) return id
@@ -68,7 +73,7 @@ export function RelationValueCell({
     return () => {
       cancelled = true
     }
-  }, [relatedSlug, displayField, value])
+  }, [relatedSlug, displayField, value, defaultLocale])
 
   if (ids.length === 0) {
     return <span className="text-muted-foreground">—</span>

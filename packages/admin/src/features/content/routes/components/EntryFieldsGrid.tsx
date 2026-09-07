@@ -53,7 +53,9 @@ export function EntryFieldsGrid({
               ]
             : undefined
         const renderValue =
-          isLocalizable && localizationEnabled ? localizedValue : values[field.name]
+          isLocalizable && localizationEnabled
+            ? localizedValue ?? (activeLocale === defaultLocale ? values[field.name] : undefined)
+            : values[field.name]
         const uidDisabled =
           field.type === 'uid' &&
           field.targetField &&

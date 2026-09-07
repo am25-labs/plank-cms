@@ -1017,6 +1017,7 @@ export function EntryForm() {
           activeLocale={activeLocale}
           onActiveLocaleChange={handleLocaleChange}
           locales={locales}
+          defaultLocale={defaultLocale}
         />
         <EntryFieldsGrid
           ct={ct}

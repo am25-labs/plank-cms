@@ -189,6 +189,7 @@ export const listEntries: SlugParam = async (req, res) => {
   const quotedSortField = quoteIdentifier(sortField)
 
   const locale = req.query.locale ? String(req.query.locale) : undefined
+  const displayLocale = req.query.displayLocale ? String(req.query.displayLocale) : locale
   const fallbacks = req.query.fallback ? String(req.query.fallback).split(',') : []
 
   const search = req.query.search ? String(req.query.search).trim() : ''
@@ -286,7 +287,7 @@ export const listEntries: SlugParam = async (req, res) => {
   const data = await Promise.all(
     filtered.map(async (row) => {
       const mmIds = await loadManyToManyIds(row.id, ct.tableName, ct.fields)
-      const resolved = resolveLocalizedRow(row, ct, locale, fallbacks)
+      const resolved = resolveLocalizedRow(row, ct, displayLocale, fallbacks)
       const key = resolved._author_avatar_url as string | null
       if (key && !key.startsWith('http')) {
         resolved._author_avatar_url = await provider.getUrl(key)
@@ -398,8 +399,15 @@ export const getEntry: SlugIdParam = async (req, res) => {
 
   assertSafeIdentifier(ct.tableName)
   const locale = req.query.locale ? String(req.query.locale) : undefined
+  const displayLocale = req.query.displayLocale ? String(req.query.displayLocale) : locale
   const fallbacks = req.query.fallback ? String(req.query.fallback).split(',') : []
-  const entry = await loadHydratedEntry(req.params.id, ct.tableName, ct.fields, locale, fallbacks)
+  const entry = await loadHydratedEntry(
+    req.params.id,
+    ct.tableName,
+    ct.fields,
+    displayLocale,
+    fallbacks,
+  )
   if (!entry) {
     res.status(404).json({ error: 'Entry not found' })
     return

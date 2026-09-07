@@ -88,7 +88,7 @@ import { StatusBadge } from './components/StatusBadge.tsx'
 export function EntriesList() {
   const { slug } = useParams<{ slug: string }>()
   const navigate = useNavigate()
-  const { timezone } = useSettings()
+  const { timezone, defaultLocale } = useSettings()
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const page = Math.max(1, Number(searchParams.get('page') ?? 1))
@@ -214,7 +214,7 @@ export function EntriesList() {
     refetch,
   } = useFetch<EntriesResponse>(
     slug && viewConfig
-      ? `/cms/admin/content-types/${slug}/entries?page=${page}&limit=${limit}&sort=${sort.field}&order=${sort.dir}${statusFilter ? `&status=${statusFilter}` : ''}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}&searchFields=${searchableFields.join(',')}` : ''}`
+      ? `/cms/admin/content-types/${slug}/entries?page=${page}&limit=${limit}&sort=${sort.field}&order=${sort.dir}&displayLocale=${encodeURIComponent(defaultLocale)}${statusFilter ? `&status=${statusFilter}` : ''}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}&searchFields=${searchableFields.join(',')}` : ''}`
       : null,
   )
 
