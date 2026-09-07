@@ -279,7 +279,7 @@ export function EntryForm() {
     const enabled = meta.enabled ?? detectedLocales.length > 0
     if (detectedLocales.length > 0) {
       setLocales(detectedLocales)
-      setActiveLocale(detectedLocales[0])
+      setActiveLocale(defaultLocale)
     } else {
       const defaults = settingsLocales && settingsLocales.length > 0 ? settingsLocales : ['en']
       setLocales(defaults)
@@ -333,6 +333,10 @@ export function EntryForm() {
       setIsPublishedStale(false)
     }
   }, [existing, ct, isNew])
+
+  useEffect(() => {
+    if (localizationEnabled) setActiveLocale(defaultLocale)
+  }, [defaultLocale, localizationEnabled])
 
   const isDirty = stableStringify(values) !== original.current
 
