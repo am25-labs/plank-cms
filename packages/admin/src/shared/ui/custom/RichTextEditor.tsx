@@ -248,6 +248,16 @@ export function RichTextEditor({
   const [linkDialogMode, setLinkDialogMode] = useState<'add' | 'edit'>('add')
   const [linkMenu, setLinkMenu] = useState<LinkMenu | null>(null)
   const linkMenuTimer = useRef<number | null>(null)
+  const linkMenuContentRef = useRef<HTMLDivElement | null>(null)
+
+  function clearLinkMenuCloseTimer() {
+    if (linkMenuTimer.current) window.clearTimeout(linkMenuTimer.current)
+  }
+
+  function scheduleLinkMenuClose() {
+    clearLinkMenuCloseTimer()
+    linkMenuTimer.current = window.setTimeout(() => setLinkMenu(null), 400)
+  }
 
   const editor = useEditor({
     extensions: [
@@ -304,7 +314,7 @@ export function RichTextEditor({
           const link = target.closest('a[href]')
           if (!link) return false
 
-          if (linkMenuTimer.current) window.clearTimeout(linkMenuTimer.current)
+          clearLinkMenuCloseTimer()
           const rect = link.getBoundingClientRect()
           setLinkMenu({
             href: link.getAttribute('href') ?? '',
@@ -321,12 +331,13 @@ export function RichTextEditor({
           const relatedTarget = event.relatedTarget
           if (
             target instanceof Element &&
-            target.closest('a[href]')?.contains(relatedTarget as Node | null)
+            (target.closest('a[href]')?.contains(relatedTarget as Node | null) ||
+              linkMenuContentRef.current?.contains(relatedTarget as Node | null))
           ) {
             return false
           }
 
-          linkMenuTimer.current = window.setTimeout(() => setLinkMenu(null), 150)
+          scheduleLinkMenuClose()
           return false
         },
       },
@@ -374,7 +385,7 @@ export function RichTextEditor({
 
   useEffect(() => {
     return () => {
-      if (linkMenuTimer.current) window.clearTimeout(linkMenuTimer.current)
+      clearLinkMenuCloseTimer()
     }
   }, [])
 
@@ -585,12 +596,11 @@ export function RichTextEditor({
             />
           </TooltipTrigger>
           <TooltipContent
+            ref={linkMenuContentRef}
             side="top"
             className="flex items-center gap-1 p-1"
-            onPointerEnter={() => {
-              if (linkMenuTimer.current) window.clearTimeout(linkMenuTimer.current)
-            }}
-            onPointerLeave={() => setLinkMenu(null)}
+            onPointerEnter={clearLinkMenuCloseTimer}
+            onPointerLeave={scheduleLinkMenuClose}
           >
             <Button
               size="sm"
